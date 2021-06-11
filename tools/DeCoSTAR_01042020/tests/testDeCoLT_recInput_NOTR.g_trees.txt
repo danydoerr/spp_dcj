@@ -1,0 +1,4 @@
+tests/geneFamily0_NOTR.phyloxml
+tests/geneFamily1_NOTR.phyloxml
+tests/geneFamily2_NOTR.phyloxml
+tests/geneFamily3_NOTR.phyloxml

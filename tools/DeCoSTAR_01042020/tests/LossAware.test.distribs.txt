@@ -1,0 +1,3 @@
+tests/LossAware.test.g_tree0.txt
+tests/LossAware.test.g_tree1.txt
+tests/LossAware.test.g_tree2.txt

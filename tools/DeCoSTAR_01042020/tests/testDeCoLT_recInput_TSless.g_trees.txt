@@ -1,0 +1,4 @@
+tests/geneFamily0_TSless.phyloxml
+tests/geneFamily1_TSless.phyloxml
+tests/geneFamily2.phyloxml
+tests/geneFamily3.phyloxml

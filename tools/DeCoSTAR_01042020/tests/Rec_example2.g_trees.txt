@@ -1,0 +1,4 @@
+tests/Rec_example2.g_tree.txt
+tests/Rec_example2.g_tree2.txt
+tests/Rec_example2.g_tree3.txt
+tests/Rec_example2.g_tree4.txt
