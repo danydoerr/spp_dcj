@@ -56,12 +56,14 @@ def objective(graphs, circ_singletons, alpha, beta, out):
         cs = circ_singletons[ident]
         if cs:
             out.write(' - ')
-        # subtract circular singleton penalty
+        # subtract circular singleton penality
         out.write(' - '.join(('{} s{}_{}'.format(alpha, j, i) for j in range(len(cs)))))
 
-    for v, vdata in chain(*map(lambda G: G.nodes(data=True), graphs.values())):
-        if vdata['type'] == du.VTYPE_CAP:
-            out.write(' - {} o{}'.format(beta, v))
+    for adj, weight in set(reduce(lambda x, y: x + y, (tuple(map(lambda z: (z[2]['id'], \
+            z[2]['penality']), filter(lambda x: 'penality' in x[2] and \
+            x[2]['type'] == du.ETYPE_ADJ, G.edges(data = True)))) for i, (_, G) in \
+            enumerate(sorted(graphs.items()))))):
+        out.write(f' - {weight * beta} x{adj}')
 
     out.write('\n\n')
 
@@ -355,32 +357,21 @@ def variables(graphs, circ_singletons, caps, out):
     print('\n')
 
 
-def identifyCandidateTelomeres(candidateAdjacencies, weightThreshold,
-        dont_add=False):
+def identifyCandidateTelomeres(candidateAdjacencies, weightThreshold, dont_add=False):
 
     res = dict()
     weights = candidateAdjacencies['weights']
     for species, adjs in candidateAdjacencies['adjacencies'].items():
         genes = candidateAdjacencies['genes'][species]
-
-        #
-        # remove telomeres from gene set
-        #
-
-        if 't' in genes:
-            genes.remove('t')
-
         # add gene extremities incident to telomeric adjacencies to telomere
         # set
-        telomeres = set(x[0][0] == 't' and x[1] or x[0] for x in adjs if 't' in
-                {x[0][0], x[1][0]})
+        telomeres = set(x[0][0] for x in adjs if x[0][1] == 'o').union(
+                (x[1][0] for x in adjs if x[1][1] == 'o'))
 
-        #
-        # remove telomeric adjacencies from adjacency set
-        #
-        for adj in tuple(adjs):
-            if 't' in {adj[0][0], adj[1][0]}:
-                adjs.remove(adj)
+        # remove telomeric extremities from gene set
+        for t in telomeres:
+            genes.remove(t)
+
         if not dont_add:
             G = nx.Graph()
             G.add_nodes_from(reduce(lambda x, y: x + y, (((g, du.EXTR_HEAD), (g,
@@ -408,7 +399,10 @@ def identifyCandidateTelomeres(candidateAdjacencies, weightThreshold,
                 # - fully connected
                 # - even (in terms of #nodes)
                 if degs.difference((1, 2)) and degs.difference((len(C)-1,)) or len(C) % 2:
-                    telomeres.update(C)
+                    for g, extr in C:
+                        t = f't_{g}_{extr}'
+                        telomeres.add(t)
+                        adjs.append(((g, extr), (t, 'o')))
 
 #        genes_edg = [((g, du.EXTR_HEAD), (g, du.EXTR_TAIL)) for g in genes]
 #        if species == 'n3':
@@ -481,12 +475,13 @@ if __name__ == '__main__':
     genes = candidateAdjacencies['genes']
     adjacencies = candidateAdjacencies['adjacencies']
     weights = candidateAdjacencies['weights']
+    penalities = candidateAdjacencies['penalities']
 
     ext2id = du.IdManager()
     LOG.info(('constructing relational diagrams for all {} branches of ' + \
             'the tree').format(len(speciesTree)))
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
-            adjacencies, telomeres, weights, genes, ext2id)
+            adjacencies, telomeres, weights, penalities, genes, ext2id)
 
     graphs = relationalDiagrams['graphs']
 
@@ -496,13 +491,13 @@ if __name__ == '__main__':
 #                genes = candidateAdjacencies['genes'][gName]
 #                genes_edg.extend(((ext2id.getId((gName, (g, du.EXTR_HEAD))),
 #                    ext2id.getId((gName, (g, du.EXTR_TAIL))))for g in genes))
-#            Gp = nx.Graph()
-#            Gp.add_edges_from(genes_edg)
-#            Gp.add_edges_from((u, v) for u, v, data in G.edges(data=True) if
-#                    data['type'] == du.ETYPE_ADJ)
-#            pos = nx.spring_layout(Gp)
-##            G = G.subgraph(nx.node_connected_component(G, ext2id.getId(('A',
-##                ('6_2', 'h')))))
+##            Gp = nx.Graph()
+##            Gp.add_edges_from(genes_edg)
+##            Gp.add_edges_from((u, v) for u, v, data in G.edges(data=True) if
+##                    data['type'] == du.ETYPE_ADJ)
+#            G = G.subgraph(nx.node_connected_component(G, ext2id.getId(('n10',
+#                ('23_7', 'h')))))
+#            pos = nx.spring_layout(G)
 ##            nx.draw_networkx_edges(G, pos, set(genes_edg).intersection(G.edges()),
 ##                edge_color='red')
 #            nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in
