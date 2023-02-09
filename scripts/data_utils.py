@@ -21,6 +21,7 @@ CHR_CIRCULAR    = ')'
 CHR_LINEAR      = '|'
 EXTR_HEAD       = 'h'
 EXTR_TAIL       = 't'
+EXTR_CAP        = 'o'
 
 ETYPE_ADJ       = 'adj'
 ETYPE_ID        = 'id'
@@ -116,6 +117,7 @@ def parseAdjacencies(data):
     resAdjacencies = defaultdict(list)
     resGenes       = defaultdict(list)
     resWeights     = {}
+    resPenalities  = {}
     for line in csv.reader(data, delimiter = delimiter):
         if line[0][0] != headerMark:
             species  = line[0]
@@ -124,7 +126,17 @@ def parseAdjacencies(data):
             gene2    = line[4]
             ext2     = (gene2,line[5])
             weight   = float(line[6])
-            addAdjacency(ext1,ext2,weight,resAdjacencies[species],resWeights,resGenes[species])
+            if (gene1, ext1) == (gene2, ext2):
+                print(f'WARNING: adjacency between the same extremity is not '
+                        f'feasible, skipping {line[1]}:{line[2]}-{line[4]}:{line[5]}',
+                        file=stderr)
+            else:
+                addAdjacency(ext1,ext2,weight,resAdjacencies[species],resWeights,resGenes[species])
+
+            # optional penality
+            if len(line) > 7 and line[7]:
+                resPenalities[ext1 > ext2 and (ext2, ext1) or (ext1, ext2)] = float(line[7])
+
     speciesList = list(resAdjacencies.keys())
     for species in speciesList:
         resGenes[species]    = list(set(resGenes[species]))
@@ -132,7 +144,7 @@ def parseAdjacencies(data):
 
     return {'species':speciesList, 'genes':resGenes,
             'adjacencies':resAdjacencies, 'weights':resWeights,
-            'families': resFamilies}
+            'families': resFamilies, 'penalities': resPenalities}
 
 
 def parseCandidateAdjacencies(data):
@@ -427,7 +439,6 @@ def parseSOL(data, idMap):
                     # edge is an extremity edge (matching edge) 
 #                    for ext in (ext1, ext2):
 #                        if ext in matchingDict:
-#                            import pdb; pdb.set_trace() 
 #                            print(f'Fatal: extremity {ext} already matched to ' + \
 #                                    f'some other extremity ({matchingDict[ext]})',
 #                                    file = stderr)
@@ -502,7 +513,7 @@ def mapFamiliesToGenes(genes):
 
 
 def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
-        extremityIdManager):
+        candidatePenalities, extremityIdManager):
     ''' create adjacencies of the genome named <gName>'''
     for ext1, ext2 in adjacencies:
         id1 = extremityIdManager.getId((gName, ext1))
@@ -511,7 +522,12 @@ def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
         # ensure that each edge has a unique identifier
         edge_id = '{}_{}'.format(*sorted((id1, id2)))
         weight = candidateWeights.get((ext1, ext2), 0)
-        G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight)
+        penality = candidatePenalities.get((ext1, ext2), None)
+        if penality is None:
+            G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight)
+        else:
+            G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight,
+                    penality=penality)
 
 
 def _constructNaiveRDCapping(G, gName1, gName2, extremityIdManager):
@@ -529,12 +545,14 @@ def _addCartesianProductCaps(G, gName1, gName2, caps, extremityIdManager):
 
     new_caps = {gName1: list(), gName2: list()}
 
+    # the number of caps that will be used *at most* is (i) even, and (ii) not
+    # more than there are caps in the other genome
     if len(caps[gName1]) < len(caps[gName2]):
-        n = (len(caps[gName2])-len(caps[gName1]) + 1)//2 * 2
+        n = (len(caps[gName2])-len(caps[gName1]))//2 * 2
         new_caps[gName1].extend(_fillUpCaps(G, gName1, n, extremityIdManager))
         caps[gName1].extend(new_caps[gName1])
     elif len(caps[gName2]) < len(caps[gName1]):
-        n = (len(caps[gName1])-len(caps[gName2]) + 1)//2 * 2
+        n = (len(caps[gName1])-len(caps[gName2]))//2 * 2
         new_caps[gName2].extend(_fillUpCaps(G, gName2, n, extremityIdManager))
         caps[gName2].extend(new_caps[gName2])
 
@@ -564,29 +582,15 @@ def _constructRDCapping(G, gName1, gName2, extremityIdManager):
 
     tel_pairs = _find_end_pairs(G, gName1, gName2)
 
-#    vv = extremityIdManager.getId(('A', ('t_457_1_t', 'h')))
-#    C = nx.connected.node_connected_component(G, vv)
-#    G = G.subgraph(C).copy()
-#    pos = nx.spring_layout(G)
-#
-#    nx.draw_networkx_nodes(G, pos=pos, node_size=8)
-#    nx.draw_networkx_labels(G, pos=pos, font_size=6, labels = dict((v,
-#        '{0}:{1[0]}{1[1]}'.format(*G.nodes[v]['id'])) for v in G.nodes()))
-#
-#    nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in G.edges(data=True)
-#        if data['type'] == ETYPE_EXTR], edge_color='green')
-#    nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in G.edges(data=True)
-#        if data['type'] == ETYPE_ID], edge_color='gray')
-#    nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in G.edges(data=True)
-#        if data['type'] == ETYPE_ADJ], edge_color='red')
-#    import matplotlib.pylab as plt
-#    plt.savefig('myfig.pdf', format='pdf')
-#    import pdb; pdb.set_trace()
+##    vv = extremityIdManager.getId(('A', ('t_457_1_t', 'h')))
+##    C = nx.connected.node_connected_component(G, vv)
+##    G = G.subgraph(C).copy()
 
 
     A_caps_with_runs, B_caps_with_runs = set(), set()
 
     # fix paths that are not connected to run-enclosing paths
+    norun = {gName1: set(), gName2: set()}
     for u, v, hasArun, hasBrun in tel_pairs:
         if not hasArun and not hasBrun:
             caps = {gName1: list(), gName2: list()}
@@ -594,17 +598,61 @@ def _constructRDCapping(G, gName1, gName2, extremityIdManager):
             caps[G.nodes[v]['id'][0]].append(v)
             _addCartesianProductCaps(G, gName1, gName2, caps,
                     extremityIdManager)
+            if G.nodes[u]['id'][0] != G.nodes[v]['id'][0]:
+                norun[G.nodes[u]['id'][0]].add(u)
+                norun[G.nodes[v]['id'][0]].add(v)
         else:
             for w in (u, v):
                 if G.nodes[w]['id'][0] == gName1:
                     A_caps_with_runs.add(w)
                 else:
                     B_caps_with_runs.add(w)
+    # treat no-run nodes: if their numbers are not matching, add caps to match
+    if len(norun[gName1])//2 > len(norun[gName2])//2:
+        n = (len(norun[gName1])//2 - len(norun[gName2])//2) * 2
+        caps = _fillUpCaps(G, gName2, n, extremityIdManager)
+        _addCartesianProductCaps(G, gName1, gName2, \
+                {gName1: list(norun[gName1]), gName2: caps}, \
+                extremityIdManager)
+    elif len(norun[gName2])//2 > len(norun[gName1])//2:
+        n = (len(norun[gName2])//2 - len(norun[gName1])//2) * 2
+        caps = _fillUpCaps(G, gName1, n, extremityIdManager)
+        _addCartesianProductCaps(G, gName1, gName2, \
+                {gName1: caps, gName2: list(norun[gName2])}, \
+                extremityIdManager)
 
     _addCartesianProductCaps(G, gName1, gName2, \
             {gName1: list(A_caps_with_runs), gName2: list(B_caps_with_runs)}, \
             extremityIdManager)
 
+#    pos = nx.spring_layout(G)
+#    pos = nx.spectral_layout(G)
+#
+#    genes_edg = list()
+#    for gName in {gName1, gName2}:
+#        genes = [(u, v) for u, v, data in G.edges(data=True) if data['type'] ==
+#                ETYPE_ADJ]
+#        genes_edg.extend(((extremityIdManager.getId((gName, (g, EXTR_HEAD))),
+#            extremityIdManager.getId((gName, (g, EXTR_TAIL))))for g in genes))
+#    Gp = nx.Graph()
+#    Gp.add_edges_from(genes_edg)
+#    Gp.add_edges_from((u, v) for u, v, data in G.edges(data=True) if
+#            data['type'] == ETYPE_ADJ)
+#    pos = nx.spring_layout(Gp)
+#
+#
+#    nx.draw_networkx_nodes(G, pos=pos, node_size=2)
+#    nx.draw_networkx_labels(G, pos=pos, font_size=8, labels = dict((v,
+#        '{0}:{1[0]}{1[1]}'.format(*G.nodes[v]['id'])) for v in G.nodes()))
+#
+##    nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in G.edges(data=True)
+##        if data['type'] == ETYPE_EXTR], edge_color='green')
+#    nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in G.edges(data=True)
+#        if data['type'] == ETYPE_ID], edge_color='gray')
+#    nx.draw_networkx_edges(G, pos, [(u, v) for u, v, data in G.edges(data=True)
+#        if data['type'] == ETYPE_ADJ], edge_color='red')
+#    import matplotlib.pylab as plt
+#    plt.savefig('myfig.pdf', format='pdf')
 
 def _find_end_pairs(G, gName1, gName2):
     """ finds all alternating paths between nodes of degree one, which are
@@ -689,7 +737,7 @@ def checkGraph(G):
         hasAdj = False
         hasExtrOrId = False
 
-        if vdata['id'][1][1] not in {EXTR_HEAD, EXTR_TAIL}:
+        if vdata['id'][1][1] not in {EXTR_HEAD, EXTR_TAIL, EXTR_CAP}:
             raise Exception(f'node {v} {G.nodes[v]["id"]} has malformed ' + \
                     'extremity')
 
@@ -806,23 +854,10 @@ def _constructRDNodes(G, gName, genes, extremityIdManager):
             dict(id=((gName, (g, extr))), type=VTYPE_EXTR)) for g in genes))
 
 
-def _constructRDTelomeres(G, gName, candidateTelomeres, candidateWeights,
-        extremityIdManager):
-
-    # fix position on collection
-    candidateTelomeres = tuple(candidateTelomeres)
-    # each cap is uniquely associated with one telomeric extremity
-    caps = [('t_{}_{}'.format(*t), EXTR_HEAD) for t in candidateTelomeres]
-    G.add_nodes_from(map(lambda x: (extremityIdManager.getId((gName, x)),
-        dict(id=(gName, x), type=VTYPE_CAP)), caps))
-
-    # create all telomeric adjacencies
-    for extr, cap in zip(candidateTelomeres, caps):
-        id1 = extremityIdManager.getId((gName, extr))
-        id2 = extremityIdManager.getId((gName, cap))
-        # telomeric adjacencies are simply identified as 't' in weight map
-        G.add_edge(id1, id2, type=ETYPE_ADJ, weight=candidateWeights.get((extr,
-            't'), 0), id='{}_{}'.format(*sorted((id1, id2))))
+def _constructRDTelomeres(G, gName, telomeres, extremityIdManager):
+    ''' create telomereic extremity nodes for the genome named <gName> '''
+    G.add_nodes_from(((extremityIdManager.getId((gName, (t, 'o'))),
+        dict(id=((gName, (t, 'o'))), type=VTYPE_CAP)) for t in telomeres))
 
 
 def hasIncidentAdjacencyEdges(G, v):
@@ -845,7 +880,7 @@ def getIncidentAdjacencyEdges(G, v):
 
 
 def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
-        candidateWeights, genes, extremityIdManager):
+        candidateWeights, candidatePenalities, genes, extremityIdManager):
     ''' constructs for each edge of the tree a relational diagram of the
     adjacent genomes'''
 
@@ -856,10 +891,10 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
 
         for gName in (child, parent):
             _constructRDNodes(G, gName, genes[gName], extremityIdManager)
-            _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],
-                    candidateWeights, extremityIdManager)
             _constructRDTelomeres(G, gName, candidateTelomeres[gName],
-                    candidateWeights, extremityIdManager)
+                                  extremityIdManager)
+            _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],
+                    candidateWeights, candidatePenalities, extremityIdManager)
 
         fam2genes1 = mapFamiliesToGenes(genes[child])
         fam2genes2 = mapFamiliesToGenes(genes[parent])
@@ -874,12 +909,7 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
     for child, parent in tree:
         G = res['graphs'][(child, parent)]
         _constructRDCapping(G, child, parent, extremityIdManager)
-        if 'n1' in {child, parent}:
-            v = extremityIdManager.getId(('n1', ('96_2', 'h')))
-            u = extremityIdManager.getId(('n1', ('t_85_2_t', 'h')))
-            if G.has_edge(u, v):
-                import pdb; pdb.set_trace() 
-        #_constructNaiveRDCapping(G, child, parent, extremityIdManager)
+#        _constructNaiveRDCapping(G, child, parent, extremityIdManager)
         # remove caps from the graph that are not saturated by two edges
 #        for v, d in tuple(G.degree()):
 #            if d == 1:
