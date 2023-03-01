@@ -581,12 +581,6 @@ def _fillUpCaps(G, gName, ncaps, extremityIdManager):
 def _constructRDCapping(G, gName1, gName2, extremityIdManager):
 
     tel_pairs = _find_end_pairs(G, gName1, gName2)
-
-##    vv = extremityIdManager.getId(('A', ('t_457_1_t', 'h')))
-##    C = nx.connected.node_connected_component(G, vv)
-##    G = G.subgraph(C).copy()
-
-
     A_caps_with_runs, B_caps_with_runs = set(), set()
 
     # fix paths that are not connected to run-enclosing paths
@@ -662,14 +656,7 @@ def _find_end_pairs(G, gName1, gName2):
     res = dict()
 
     # identify caps
-    valid_ends = set((v for v, d in G.degree() if d == 1))
-    # check if in fact all ends are caps
-    if not all(map(lambda v: G.nodes[v]['type'] == VTYPE_CAP, valid_ends)):
-        raise Exception('assumption that all ends in the graph to be ' + \
-                'telomeric caps failed')
-
-#    incidentToID = lambda v: any(map(lambda x: x['type'] == ETYPE_ID,
-#        chain(*(G[u][v].values() for u in G.neighbors(v)))))
+    valid_ends = set((v for v, data in G.nodes(data=True) if data['type'] == VTYPE_CAP))
 
     # checks if edge v-u is ID and if so, sets ID label of corresponding genome
     # to 1, and returns the label vector. 
@@ -707,7 +694,7 @@ def _find_end_pairs(G, gName1, gName2):
                             # update B-run flag
                             labels[u][3] |= data['type'] == ETYPE_ID
 
-                        if G.degree(u) == 1 and u != end:
+                        if G.nodes[u]['type'] == VTYPE_CAP and u != end:
                             x, y = end < u and (end, u) or (u, end)
                             if (x, y) not in res:
                                 res[(x, y)] = [0, 0]

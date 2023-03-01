@@ -527,6 +527,7 @@ if __name__ == '__main__':
     circ_singletons = dict()
     for ident, G in graphs.items():
         circ_singletons[ident] = du.identifyCircularSingletonCandidates(G)
+        LOG.info(f'identified {len(circ_singletons[ident])} circular singleton candidates')
 
     caps = getAllCaps(graphs)
     # construct & output ILP
