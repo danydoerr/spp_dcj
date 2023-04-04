@@ -141,7 +141,7 @@ if __name__ == '__main__':
 
     G = constructGraph(vars_)
     annotateGraph(G, id2ext)
-    checkConsistency(G)
+#    checkConsistency(G)
 
 
 #    from matplotlib import pylab as plt

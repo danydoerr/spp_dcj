@@ -446,6 +446,9 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--beta', default = -1, type=float,
             help='linear weighting factor for telomeric adjacencies;' + \
                     'if beta < 0, then beta is set to 1/2 * alpha')
+    parser.add_argument('-s', '--separator', default = du.DEFAULT_GENE_FAM_SEP, \
+            help='Separator of in gene names to split <family ID> and ' +
+                    '<uniquifying identifier> in adjacencies file')
 
     args = parser.parse_args()
 
@@ -463,9 +466,11 @@ if __name__ == '__main__':
     LOG.info('loading species tree from {}'.format(args.tree.name))
     speciesTree = du.parseTree(args.tree)
 
-    LOG.info('loading candidate adjacencies from {}'.format(
-        args.candidateAdjacencies.name))
-    candidateAdjacencies = du.parseAdjacencies(args.candidateAdjacencies)
+    LOG.info(('loading candidate adjacencies from {}, using "{}" to separate' + \
+            ' gene family from uniquifying identifier').format(
+        args.candidateAdjacencies.name, args.separator))
+    candidateAdjacencies = du.parseAdjacencies(args.candidateAdjacencies,
+                                               sep=args.separator)
 
     # add telomeres
     telomeres = identifyCandidateTelomeres(candidateAdjacencies,
@@ -481,7 +486,8 @@ if __name__ == '__main__':
     LOG.info(('constructing relational diagrams for all {} branches of ' + \
             'the tree').format(len(speciesTree)))
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
-            adjacencies, telomeres, weights, penalities, genes, ext2id)
+            adjacencies, telomeres, weights, penalities, genes, ext2id,
+            sep=args.separator)
 
     graphs = relationalDiagrams['graphs']
 

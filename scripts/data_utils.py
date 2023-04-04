@@ -42,6 +42,8 @@ EXT_COMPLEMENT = {EXTR_HEAD:EXTR_TAIL,EXTR_TAIL:EXTR_HEAD}
 
 TRUE_ADJ_WEIGHT  = 1
 
+DEFAULT_GENE_FAM_SEP = '_'
+
 PAT_ADJ = re.compile('^(\w+)@([0-9_]+)$')
 PAT_MATCHED_EDGE = re.compile('^x(\d+)_(\d+)([^0-9 \t]*) 1\s*$')
 
@@ -89,12 +91,12 @@ def getTreeDepth(tree):
 
     return res
 
-def getFamiliesFromGenes(genesList,speciesList):
+def getFamiliesFromGenes(genesList,speciesList, sep=DEFAULT_GENE_FAM_SEP):
     resFamilies = {}
     for species in speciesList:
         resFamilies[species] = defaultdict(list)
         for gene in genesList[species]:
-            family = getFamily(gene)
+            family = getFamily(gene, sep=sep)
             resFamilies[species][family].append(gene)
     return(resFamilies)
 
@@ -110,7 +112,7 @@ def addAdjacency(ext1,ext2,weight,resAdjacencies,resWeights,resGenes):
     resGenes.append(gene2)
 
 
-def parseAdjacencies(data):
+def parseAdjacencies(data, sep=DEFAULT_GENE_FAM_SEP):
     '''Read a file of adjacencies in the format species\tgene1\text1\tspecies\tgene2\text2\tweight'''
     headerMark = '#'
     delimiter = '\t'
@@ -140,14 +142,14 @@ def parseAdjacencies(data):
     speciesList = list(resAdjacencies.keys())
     for species in speciesList:
         resGenes[species]    = list(set(resGenes[species]))
-    resFamilies = getFamiliesFromGenes(resGenes,speciesList)
+    resFamilies = getFamiliesFromGenes(resGenes, speciesList, sep=sep)
 
     return {'species':speciesList, 'genes':resGenes,
             'adjacencies':resAdjacencies, 'weights':resWeights,
             'families': resFamilies, 'penalities': resPenalities}
 
 
-def parseCandidateAdjacencies(data):
+def parseCandidateAdjacencies(data, sep=DEFAULT_GENE_FAM_SEP):
     '''Read candidate adjacencies, returned as a dictionary, indexed by
     species, where for each species we have a list of pairs of gene
     extremities.
@@ -183,14 +185,14 @@ def parseCandidateAdjacencies(data):
     speciesList = list(resAdjacencies.keys())
     for species in speciesList:
         resGenes[species] = list(set(resGenes[species]))
-    resFamilies = getFamiliesFromGenes(resGenes,speciesList)
+    resFamilies = getFamiliesFromGenes(resGenes,speciesList, sep=sep)
 
     return {'species':speciesList, 'genes':resGenes,
             'adjacencies':resAdjacencies, 'weights':resWeights,
             'families': resFamilies}
 
 
-def parseTrueGeneOrders(data, close_linear=False):
+def parseTrueGeneOrders(data, close_linear=False, sep=DEFAULT_GENE_FAM_SEP):
     '''Read true gene orders, returned as a dictionary, indexed by species,
     where for each species we have a list of pairs of gene extremities.
     If close_linear = True, we assume linear chromosomes and we close them all.
@@ -261,7 +263,7 @@ def parseTrueGeneOrders(data, close_linear=False):
             resWeights[ext1,ext2] = TRUE_ADJ_WEIGHT
 
     speciesList = list(resAdjacencies.keys())
-    resFamilies = getFamiliesFromGenes(resGenes,speciesList)
+    resFamilies = getFamiliesFromGenes(resGenes,speciesList, sep=sep)
 
     return {'species':speciesList, 'genes':resGenes,
             'adjacencies':resAdjacencies, 'weights':resWeights,
@@ -489,7 +491,7 @@ def getLeaves(branches):
     return leavesDict
 
 
-def getFamily(gene_extr):
+def getFamily(gene_extr, sep=DEFAULT_GENE_FAM_SEP):
     ''' @returns the family identifier of a gene or gene extremity'''
     assert type(gene_extr) is tuple or type(gene_extr) is str
 
@@ -497,14 +499,14 @@ def getFamily(gene_extr):
     if type(gene_extr) == tuple:
         gene_extr = gene_extr[0]
 
-    return gene_extr[:gene_extr.find('_')]
+    return gene_extr[:gene_extr.find(sep)]
 
 
-def mapFamiliesToGenes(genes):
+def mapFamiliesToGenes(genes, sep=DEFAULT_GENE_FAM_SEP):
 
     res = dict()
     for gene in genes:
-        gid = getFamily(gene)
+        gid = getFamily(gene, sep=sep)
         if gid not in res:
             res[gid] = list()
         res[gid].append(gene)
@@ -867,7 +869,8 @@ def getIncidentAdjacencyEdges(G, v):
 
 
 def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
-        candidateWeights, candidatePenalities, genes, extremityIdManager):
+        candidateWeights, candidatePenalities, genes, extremityIdManager,
+        sep=DEFAULT_GENE_FAM_SEP):
     ''' constructs for each edge of the tree a relational diagram of the
     adjacent genomes'''
 
@@ -883,8 +886,8 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
             _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],
                     candidateWeights, candidatePenalities, extremityIdManager)
 
-        fam2genes1 = mapFamiliesToGenes(genes[child])
-        fam2genes2 = mapFamiliesToGenes(genes[parent])
+        fam2genes1 = mapFamiliesToGenes(genes[child], sep=sep)
+        fam2genes2 = mapFamiliesToGenes(genes[parent], sep=sep)
         siblings   = _constructRDExtremityEdges(G, child, parent, genes,
                 fam2genes1, fam2genes2, extremityIdManager)
 
