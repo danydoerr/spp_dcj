@@ -255,6 +255,180 @@ def c13(caps, out):
                 cap_set)), j), file = out)
 
 
+
+def cf_var(v=None,mrd=None,tp=None,mn=None):
+    if v==None or mrd==None or tp==None or mn==None:
+        #Variables are only optional so, I don't confuse their order.
+        raise Exception("Not enough values provided.")
+    return "{}v{}m{}t{}".format(mn,v,mrd,tp)
+
+def mvar(v=None,mrd=None,tp=None):
+    return cf_var(v=v,mrd=mrd,tp=tp,mn="m")
+
+def nvar(v=None,mrd=None,tp=None):
+    return cf_var(v=v,mrd=mrd,tp=tp,mn="n")
+
+def reportvar(v=None,mrd=None,tp=None):
+    return cf_var(v=v,mrd=mrd,tp=tp,mn="r")
+
+def summationvar(qr=None,mrd=None):
+    if qr==None or mrd==None:
+        #Variables are only optional so, I don't confuse their order.
+        raise Exception("Not enough values provided.")
+    return 'summationvar{}m{}'.format(qr,mrd)
+
+
+TELOMERE_A = 'A'
+TELOMERE_B = 'B'
+INDEL_A = 'a'
+INDEL_B = 'b'
+SUBPATHTYPES = [TELOMERE_A,TELOMERE_B,INDEL_A,INDEL_B]
+PTYPE_CYCLE = 'c'
+PATHTYPES = [PTYPE_CYCLE]+[a+b for a in SUBPATHTYPES for b in SUBPATHTYPES if a < b]
+
+def cfc01(G,out):
+    for v, vdata in G.nodes(data = True):
+        line = ' + '.join(["x{}".format(data['id']) for u in G.neighbors(v) 
+                           for data in G[u][v].values()
+                           if data['type']==du.ETYPE_ADJ ])
+        if line:
+            line+=" + "
+        line+="t{} = 1\n".format(v)
+        out.write(line)
+
+def cfc02(G, compnum, out):
+    for v in G.nodes():
+            #TODO: Why is there no comparison index necessary when the edge is an extremity edge?
+            #i.e. compare to:  line += 'x{}{}'.format(data['id'], data['type'] == du.ETYPE_ID and '_%s' %i or '')
+            line = ' + '.join(['x{}{}'.format(data['id'],'_%s'%compnum if data['type']==du.ETYPE_ID else '')
+                               for u in G.neighbors(v) for data in G[u][v].values() 
+                               if data['type'] in [du.ETYPE_EXTR,du.ETYPE_ID]]) 
+            line += ' = 1\n'
+            out.write(line)
+
+def cfc03(siblings,out):
+    #This should work as the sibling sets should be the same.
+    return c03(siblings,out)
+
+
+def cfc04(G,compnum,out):
+    #again, no difference between cf and capped version
+    return c04(G,compnum,out)
+
+def cfc05(G,compnum,out):
+    #again, no difference between cf and capped version
+    return c05(G,compnum,out)
+
+def cfc07(G,compnum,out,genomes):
+    for v in G.nodes():
+        #TODO: realistically, this should only be one edge, right?
+        line = ' + '.join(['x{}{}'.format(data['id'],'_%s'%compnum)
+                               for u in G.neighbors(v) for data in G[u][v].values() 
+                               if data['type'] == du.ETYPE_ID])
+        if G.nodes[v]['id'][0] == genomes[0]:
+            sptype = INDEL_A
+        else:
+            sptype = INDEL_B
+        line+=' - {} <= 0\n'.format(mvar(mrd=compnum,tp=sptype,v=v))
+        out.write(line)
+
+def cfc06(G,compnum,out,genomes):
+    for v in G.nodes():
+        if G.nodes[v]['id'][0] == genomes[0]:
+            sptype = TELOMERE_A
+        else:
+            sptype = TELOMERE_B
+        line='t_{} - {} <= 0\n'.format(v,mvar(mrd=compnum,tp=sptype,v=v))
+        out.write(line)
+
+def cfc08(G,compnum,out):
+    for v in G.nodes():
+        for mn in "mn":
+            line = ' + '.join([cf_var(v=v,tp=tp,mrd=compnum,mn=mn) for tp in SUBPATHTYPES])
+            line+= ' <= 1\n'
+            out.write(line)
+def cfc09(G,compnum,out):
+    for ur,vr,data in G.edges(data=True):
+        if data['type'] == du.ETYPE_ID:
+            #the variables are not passed between indel edges,
+            #id-edges are considered 'virtual'
+            continue
+        elif data['type'] == du.ETYPE_ADJ:
+            mn='n'
+        elif data['type'] == du.ETYPE_EXTR:
+            mn='m'
+        else:
+            raise Exception("Unknown edge type: '{}'".format(data['type']))
+        for u,v in [(ur,vr),(vr,ur)]:
+            #make sure to have both variants
+            for tp in SUBPATHTYPES:
+                line = '{} - {} + x{} <= 1\n'.format(cf_var(mrd=compnum,tp=tp,v=u,mn=mn),
+                                                     cf_var(mrd=compnum,tp=tp,v=v,mn=mn),
+                                                     data['id'])
+                out.write(line)
+
+def cfc10(G,compnum,out):
+    for v in G.nodes():
+        for m,n in [('m','n'),('n','m')]:
+            for pt in SUBPATHTYPES:
+                line = '{} - {} - z{}_{} <= 0\n'.format(cf_var(mn=m,tp=pt,mrd=compnum,v=v),
+                                                        cf_var(mn=n,tp=pt,mrd=compnum,v=v),
+                                                        v,compnum)
+                out.write(line)
+
+
+def cfc11(G,compnum,out):
+    for v in G.nodes():
+        line = ' + '.join([reportvar(mrd=compnum,tp=tp,v=v) for tp in PATHTYPES])
+        line += ' - z{}_{} = 0\n'.format(v,compnum)
+        out.write(line)
+
+def cfc12(G,compnum,out):
+    for v in G.nodes():
+        for ij in PATHTYPES:
+            if ij==PTYPE_CYCLE:
+                line = ' + '.join([mvar(mrd=compnum,tp=tp,v=v) for tp in SUBPATHTYPES])
+                line+= ' + '.join([nvar(mrd=compnum,tp=tp,v=v) for tp in SUBPATHTYPES])
+                line+= ' + 8 {} <= 8\n'.format(reportvar(tp=PTYPE_CYCLE,mrd=compnum,v=v))
+                out.write(line)
+            else:
+                for k in ij:
+                    line = '{} - {} - {} <= 0\n'.format(reportvar(mrd=compnum,tp=ij,v=v),
+                                                        mvar(mrd=compnum,tp=k,v=v),
+                                                        nvar(mrd=compnum,tp=k,v=v))
+                    out.write(line)
+
+def cfc13(G,compnum,out):
+    for v in G.nodes():
+        for ij in PATHTYPES:
+            for i,j in [tuple(ij),tuple(ij[::-1])]:
+                line = '{} + {} - {} <= 1\n'.format(mvar(v=v,mrd=compnum,tp=i),nvar(v=v,mrd=compnum,tp=j))
+                out.write(line)
+
+def cfc14_15(G,compnum,out):
+    for idtype in [INDEL_A,INDEL_B]:
+        rv = summationvar(qr='r'+INDEL_A,mrd=compnum)
+        for tltype in [TELOMERE_A,TELOMERE_B]:
+            sm = ' + '.join([reportvar(mrd=compnum,v=v,tp=''.join(sorted([tltype,idtype]))) for v in G.nodes()])
+            out.write('{} - {} <= 0\n'.format(sm,rv))
+
+def cfc16(G,compnum,out):
+    numerator = ' + '.join([reportvar(mrd=compnum,v=v,tp=''.join(sorted([INDEL_A,INDEL_B]))) for v in G.nodes()])
+    if numerator:
+        numerator+=' + '
+    numerator+=summationvar(qr='r'+INDEL_A,mrd=compnum)
+    numerator+=summationvar(qr='r'+INDEL_B,mrd=compnum)
+    negative = ' - '.join([reportvar(mrd=compnum,v=v,tp=''.join(sorted([TELOMERE_A,TELOMERE_B]))) for v in G.nodes()])
+    if negative:
+        numerator+=(" - "+negative)
+    line = numerator+" - {}\n".format(summationvar(qr='q',mrd=compnum))
+    out.write(line)
+
+def cfc17(G,compnum,out,genomes):
+    #for now handle circular singletons like in the original
+    #TODO: Implement Barber shop variant
+    return c09(G, compnum, out, genomes)
+
 def getAllCaps(graphs):
     res = dict((k, set()) for k in set(chain(*graphs.keys())))
 
@@ -449,6 +623,8 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--separator', default = du.DEFAULT_GENE_FAM_SEP, \
             help='Separator of in gene names to split <family ID> and ' +
                     '<uniquifying identifier> in adjacencies file')
+    
+    parser.add_argument('-cf','--capping-free',action='store_true',help='Activate (experimental) capping-free mode.')
 
     args = parser.parse_args()
 
@@ -487,7 +663,7 @@ if __name__ == '__main__':
             'the tree').format(len(speciesTree)))
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
             adjacencies, telomeres, weights, penalities, genes, ext2id,
-            sep=args.separator)
+            sep=args.separator,capping=not args.cf)
 
     graphs = relationalDiagrams['graphs']
 
