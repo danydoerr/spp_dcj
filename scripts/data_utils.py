@@ -514,17 +514,38 @@ def mapFamiliesToGenes(genes, sep=DEFAULT_GENE_FAM_SEP):
     return res
 
 
+def is_telomere(r):
+    #TODO: Is this correct?
+    return r[1]=='o'
+
+TWEIGHT = 'tweight'
+TPENALTY = 'tpenalty'
+
 def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
         candidatePenalities, extremityIdManager):
     ''' create adjacencies of the genome named <gName>'''
     for ext1, ext2 in adjacencies:
-        id1 = extremityIdManager.getId((gName, ext1))
-        id2 = extremityIdManager.getId((gName, ext2))
 
-        # ensure that each edge has a unique identifier
-        edge_id = '{}_{}'.format(*sorted((id1, id2)))
         weight = candidateWeights.get((ext1, ext2), 0)
         penality = candidatePenalities.get((ext1, ext2), None)
+        #Skip telomeres; we have not added them as vertices
+        #but remember the weight of the telomeric adjacency
+        if is_telomere(ext1):
+            id2 = extremityIdManager.getId((gName, ext2))
+            G.nodes[id2][TWEIGHT] = weight
+            if penality is not None:
+                G.nodes[id2][TPENALTY]
+            continue
+        elif is_telomere(ext2):
+            id1 = extremityIdManager.getId((gName, ext1))
+            G.nodes[id1][TWEIGHT] = weight
+            if penality is not None:
+                G.nodes[id1][TPENALTY]
+            continue
+        id1 = extremityIdManager.getId((gName, ext1))
+        id2 = extremityIdManager.getId((gName, ext2))
+        # ensure that each edge has a unique identifier
+        edge_id = '{}_{}'.format(*sorted((id1, id2)))
         if penality is None:
             G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight)
         else:
@@ -881,8 +902,9 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
 
         for gName in (child, parent):
             _constructRDNodes(G, gName, genes[gName], extremityIdManager)
-            _constructRDTelomeres(G, gName, candidateTelomeres[gName],
-                                  extremityIdManager)
+            if not capping:
+                _constructRDTelomeres(G, gName, candidateTelomeres[gName],
+                                    extremityIdManager)
             _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],
                     candidateWeights, candidatePenalities, extremityIdManager)
 

@@ -96,6 +96,32 @@ def constraints(graphs, siblings, circ_singletons, caps, out):
 
     out.write('\n')
 
+def cf_constraints(graphs, siblings, circ_singletons, caps, out):
+
+    out.write('subject to\n')
+
+    for i, ((child, parent), G) in enumerate(sorted(graphs.items())):
+
+        LOG.info(('writing capping-free constraints for relational diagram of {} and ' + \
+                '{}').format(child, parent))
+        cfc01(G,out)
+        cfc02(G,i,out)
+        cfc03(siblings[(child, parent)], out)
+        cfc04(G,i,out)
+        cfc05(G,i,out)
+        cfc06(G,i,out,(child,parent))
+        cfc07(G,i,out,(child,parent))
+        cfc08(G,i,out)
+        cfc09(G,i,out)
+        cfc10(G,i,out)
+        cfc11(G,i,out)
+        cfc12(G,i,out)
+        cfc13(G,i,out)
+        cfc14_15(G,i,out)
+        cfc16(G,i,out)
+        cfc17(G,i,out)
+    out.write('\n')
+
 
 def c01(G, out):
     for v, vdata in G.nodes(data = True):
@@ -429,6 +455,57 @@ def cfc17(G,compnum,out,genomes):
     #TODO: Implement Barber shop variant
     return c09(G, compnum, out, genomes)
 
+
+
+def cf_objective(graphs,circ_singletons,alpha,beta,out):
+    #TODO: What about telomeric, ie. artificial adjacencies?
+    #How to get their weight?
+    written=False
+    adjs = set(reduce(lambda x, y: x + y, (tuple(map(lambda z: (z[2]['id'], \
+            z[2]['weight']), filter(lambda x: x[2]['type'] == du.ETYPE_ADJ, \
+            G.edges(data = True)))) for i, (_, G) in \
+            enumerate(sorted(graphs.items())))))
+
+    out.write(' + '.join(map(lambda x: '{} x{}'.format(x[1] * (1-alpha), \
+            x[0]), adjs)))
+    written=written or (len(adjs) > 0)
+    allnodeswithdata = dict([(v,data) for _,G in graphs.items() for v,data in G.nodes()])
+    tlwght = ['{} t{}'.format((1-alpha)*data.get(du.TWEIGHT,0),v) for v,data in allnodeswithdata.items()]
+    if written and len(tlwght) > 0:
+        out.write(' + ')
+    out.write(' + '.join(tlwght))
+    written=written or (len(tlwght) > 0)
+    rc = ['{} {}'.format(alpha,reportvar(mrd=i,tp=PTYPE_CYCLE,v=v)) for i,(_,G) in enumerate(graphs.items()) for v in G.nodes()]
+    if len(rc) > 0 and written:
+        out.write(' + ')
+    out.write(' + '.join(rc))
+    written=written or (len(rc) > 0)
+    qs = [' {} {}'.format(alpha,summationvar(qr='q',mrd=i)) for i,_ in enumerate(graphs.items())]
+    if len(qs) > 0:
+        out.write(' - ')
+    out.write(' - '.join(qs))
+    written=written or (len(qs) > 0)
+    for i, ident in enumerate(sorted(graphs.keys())):
+        cs = circ_singletons[ident]
+        if cs:
+            out.write(' - ')
+            written=True
+        # subtract circular singleton penality
+        out.write(' - '.join(('{} s{}_{}'.format(alpha, j, i) for j in range(len(cs)))))
+    '''for adj, weight in set(reduce(lambda x, y: x + y, (tuple(map(lambda z: (z[2]['id'], \
+            z[2]['penality']), filter(lambda x: 'penality' in x[2] and \
+            x[2]['type'] == du.ETYPE_ADJ, G.edges(data = True)))) for i, (_, G) in \
+            enumerate(sorted(graphs.items()))))):
+        out.write(f' - {weight * beta} x{adj}')'''
+    #TODO: Did I translate this right?
+    tlpens = ['{} t{}'.format(data[du.TPENALTY]*beta,v) for v,data in allnodeswithdata if du.TPENALTY in data]
+    if len(tlpens)>0:
+        out.write(' - ')
+    out.write(' - '.join(tlpens))
+    out.write('\n\n')
+    
+
+
 def getAllCaps(graphs):
     res = dict((k, set()) for k in set(chain(*graphs.keys())))
 
@@ -454,6 +531,10 @@ def domains(graphs, out):
 
     out.write('\n')
 
+
+def cf_domains(graphs,out):
+    #This should be the same as only y has a domain beyond binary/general, which both ILPs share
+    return domains(graphs,out)
 
 def d02(G, i, out):
 
@@ -530,6 +611,33 @@ def variables(graphs, circ_singletons, caps, out):
     print('\n'.join(variables), file = out)
     print('\n')
 
+def cf_variables(graphs, circ_singletons,out):
+    print('generals',file=out)
+    for i, ((child, parent), G) in enumerate(sorted(graphs.items())):
+
+        LOG.info(('writing general variables for relational diagram of {} ' + \
+                'and {}').format(child, parent))
+        for v in G.nodes():
+            print(' y{}_{}'.format(v, i),file=out)
+        for idtype in [INDEL_A,INDEL_B]:
+            print(' '+summationvar(mrd=i,qr='r'+idtype))
+        print(' '+summationvar(mrd=i,qr='q'))
+    print('binaries',file=out)
+    for i, ((child, parent), G) in enumerate(sorted(graphs.items())):
+        LOG.info(('writing binary variables for relational diagram of {} ' + \
+                'and {}').format(child, parent))
+        for _, _, data in G.edges(data = True):
+            print(' x{}{}'.format(data['id'], data['type'] ==
+                du.ETYPE_ID and '_%s' %i or ''),file=out)
+        for v in G.nodes():
+            print(' z{}_{}'.format(v, i),file=out)
+            for nm in ['n','m']:
+                for tp in SUBPATHTYPES:
+                    print(' '+cf_var(mrd=i,v=v,nm=nm,tp=tp),file=out)
+            for tp in PATHTYPES:
+                print(' '+reportvar(mrd=i,v=v,tp=tp),file=out)
+            for j in range(len(circ_singletons[(child, parent)])):
+                print(' s{}_{}'.format(j, i))
 
 def identifyCandidateTelomeres(candidateAdjacencies, weightThreshold, dont_add=False):
 
@@ -711,21 +819,34 @@ if __name__ == '__main__':
         circ_singletons[ident] = du.identifyCircularSingletonCandidates(G)
         LOG.info(f'identified {len(circ_singletons[ident])} circular singleton candidates')
 
-    caps = getAllCaps(graphs)
+    if not args.cf:
+        caps = getAllCaps(graphs)
     # construct & output ILP
     out = stdout
 
     LOG.info('writing objective over all graphs')
-    objective(graphs, circ_singletons, args.alpha, beta, out)
+    if args.cf:
+        cf_objective(graphs,circ_singletons,args.alpha,beta,out)
+    else:
+        objective(graphs, circ_singletons, args.alpha, beta, out)
 
     LOG.info('writing constraints...')
-    constraints(graphs, siblings, circ_singletons, caps, out)
+    if args.cf:
+        cf_constraints(graphs, siblings, circ_singletons, out)
+    else:
+        constraints(graphs, siblings, circ_singletons, caps, out)
 
     LOG.info('writing domains...')
-    domains(graphs, out)
+    if args.cf:
+        cf_domains(graphs,out)
+    else:
+        domains(graphs, out)
 
     LOG.info('writing variables...')
-    variables(graphs, circ_singletons, caps, out)
+    if args.cf:
+        cf_variables(graphs,circ_singletons,out)
+    else:
+        variables(graphs, circ_singletons, caps, out)
 
     if args.output_id_mapping:
         LOG.info('writing ID-to-gene extremity mapping to {}'.format(
