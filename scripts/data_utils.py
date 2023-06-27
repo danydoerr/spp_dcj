@@ -902,7 +902,7 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
 
         for gName in (child, parent):
             _constructRDNodes(G, gName, genes[gName], extremityIdManager)
-            if not capping:
+            if capping:
                 _constructRDTelomeres(G, gName, candidateTelomeres[gName],
                                     extremityIdManager)
             _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],

@@ -732,7 +732,7 @@ if __name__ == '__main__':
             help='Separator of in gene names to split <family ID> and ' +
                     '<uniquifying identifier> in adjacencies file')
     
-    parser.add_argument('-cf','--capping-free',action='store_true',help='Activate (experimental) capping-free mode.')
+    parser.add_argument('-cf','--capping-free',action='store_true',help='Activate (experimental) capping-free mode.',dest='cf')
 
     args = parser.parse_args()
 
@@ -741,7 +741,7 @@ if __name__ == '__main__':
     ch.setLevel(logging.INFO)
     ch.setFormatter(logging.Formatter('%(levelname)s\t%(asctime)s\t%(message)s'))
     LOG.addHandler(ch)
-
+    LOG.info("cf set to {}".format(args.cf))
     beta = args.beta
     if beta < 0:
         beta = args.alpha * 0.5
