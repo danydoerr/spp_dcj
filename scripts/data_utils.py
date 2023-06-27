@@ -728,7 +728,7 @@ def _find_end_pairs(G, gName1, gName2):
     return {(u, v, Arun, Brun) for (u, v), (Arun, Brun) in res.items()}
 
 
-def checkGraph(G):
+def checkGraph(G,capping=True):
 
     for u, v, in G.edges():
         if u == v:
@@ -755,7 +755,7 @@ def checkGraph(G):
             for data in G[u][v].values():
                 hasAdj |= data['type'] == ETYPE_ADJ
                 hasExtrOrId |= data['type'] in {ETYPE_ID, ETYPE_EXTR}
-        if not hasAdj:
+        if not hasAdj and capping:
             raise Exception(f'node {v} {G.nodes[v]["id"]} is not incident ' + \
                     'to an adjacency edge')
         if not hasExtrOrId:

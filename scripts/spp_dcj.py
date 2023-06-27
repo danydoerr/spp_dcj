@@ -96,7 +96,7 @@ def constraints(graphs, siblings, circ_singletons, caps, out):
 
     out.write('\n')
 
-def cf_constraints(graphs, siblings, circ_singletons, caps, out):
+def cf_constraints(graphs, siblings, circ_singletons, out):
 
     out.write('subject to\n')
 
@@ -119,7 +119,7 @@ def cf_constraints(graphs, siblings, circ_singletons, caps, out):
         cfc13(G,i,out)
         cfc14_15(G,i,out)
         cfc16(G,i,out)
-        cfc17(G,i,out)
+        cfc17(circ_singletons,i,out)
     out.write('\n')
 
 
@@ -427,8 +427,11 @@ def cfc12(G,compnum,out):
 def cfc13(G,compnum,out):
     for v in G.nodes():
         for ij in PATHTYPES:
+            if ij == PTYPE_CYCLE:
+                #this constraint does not apply to cycles
+                continue
             for i,j in [tuple(ij),tuple(ij[::-1])]:
-                line = '{} + {} - {} <= 1\n'.format(mvar(v=v,mrd=compnum,tp=i),nvar(v=v,mrd=compnum,tp=j))
+                line = '{} + {} - {} <= 1\n'.format(mvar(v=v,mrd=compnum,tp=i),nvar(v=v,mrd=compnum,tp=j),reportvar(v=v,tp=ij,mrd=compnum))
                 out.write(line)
 
 def cfc14_15(G,compnum,out):
@@ -450,10 +453,10 @@ def cfc16(G,compnum,out):
     line = numerator+" - {}\n".format(summationvar(qr='q',mrd=compnum))
     out.write(line)
 
-def cfc17(G,compnum,out,genomes):
+def cfc17(circ_singletons, i, out):
     #for now handle circular singletons like in the original
     #TODO: Implement Barber shop variant
-    return c09(G, compnum, out, genomes)
+    return c12(circ_singletons, i, out)
 
 
 
@@ -469,7 +472,7 @@ def cf_objective(graphs,circ_singletons,alpha,beta,out):
     out.write(' + '.join(map(lambda x: '{} x{}'.format(x[1] * (1-alpha), \
             x[0]), adjs)))
     written=written or (len(adjs) > 0)
-    allnodeswithdata = dict([(v,data) for _,G in graphs.items() for v,data in G.nodes()])
+    allnodeswithdata = dict([(v,data) for _,G in graphs.items() for v,data in G.nodes(data=True)])
     tlwght = ['{} t{}'.format((1-alpha)*data.get(du.TWEIGHT,0),v) for v,data in allnodeswithdata.items()]
     if written and len(tlwght) > 0:
         out.write(' + ')
@@ -498,7 +501,7 @@ def cf_objective(graphs,circ_singletons,alpha,beta,out):
             enumerate(sorted(graphs.items()))))):
         out.write(f' - {weight * beta} x{adj}')'''
     #TODO: Did I translate this right?
-    tlpens = ['{} t{}'.format(data[du.TPENALTY]*beta,v) for v,data in allnodeswithdata if du.TPENALTY in data]
+    tlpens = ['{} t{}'.format(data[du.TPENALTY]*beta,v) for v,data in allnodeswithdata.items() if du.TPENALTY in data]
     if len(tlpens)>0:
         out.write(' - ')
     out.write(' - '.join(tlpens))
@@ -811,7 +814,7 @@ if __name__ == '__main__':
     siblings = relationalDiagrams['siblings']
 
     for G in graphs.values():
-        du.checkGraph(G)
+        du.checkGraph(G,capping=not args.cappingfree)
 
     circ_singletons = dict()
     for ident, G in graphs.items():
@@ -831,7 +834,7 @@ if __name__ == '__main__':
 
     LOG.info('writing constraints...')
     if args.cappingfree:
-        cf_constraints(graphs, siblings, circ_singletons, out)
+        cf_constraints(graphs,siblings,circ_singletons,out)
     else:
         constraints(graphs, siblings, circ_singletons, caps, out)
 
