@@ -522,7 +522,7 @@ TWEIGHT = 'tweight'
 TPENALTY = 'tpenalty'
 
 def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
-        candidatePenalities, extremityIdManager):
+        candidatePenalities, extremityIdManager,capping=True):
     ''' create adjacencies of the genome named <gName>'''
     for ext1, ext2 in adjacencies:
 
@@ -530,13 +530,13 @@ def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
         penality = candidatePenalities.get((ext1, ext2), None)
         #Skip telomeres; we have not added them as vertices
         #but remember the weight of the telomeric adjacency
-        if is_telomere(ext1):
+        if is_telomere(ext1) and not capping:
             id2 = extremityIdManager.getId((gName, ext2))
             G.nodes[id2][TWEIGHT] = weight
             if penality is not None:
                 G.nodes[id2][TPENALTY]
             continue
-        elif is_telomere(ext2):
+        elif is_telomere(ext2) and not capping:
             id1 = extremityIdManager.getId((gName, ext1))
             G.nodes[id1][TWEIGHT] = weight
             if penality is not None:
@@ -906,7 +906,7 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
                 _constructRDTelomeres(G, gName, candidateTelomeres[gName],
                                     extremityIdManager)
             _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],
-                    candidateWeights, candidatePenalities, extremityIdManager)
+                    candidateWeights, candidatePenalities, extremityIdManager,capping=capping)
 
         fam2genes1 = mapFamiliesToGenes(genes[child], sep=sep)
         fam2genes2 = mapFamiliesToGenes(genes[parent], sep=sep)

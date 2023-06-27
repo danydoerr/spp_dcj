@@ -732,7 +732,7 @@ if __name__ == '__main__':
             help='Separator of in gene names to split <family ID> and ' +
                     '<uniquifying identifier> in adjacencies file')
     
-    parser.add_argument('-cf','--capping-free',action='store_true',help='Activate (experimental) capping-free mode.',dest='cf')
+    parser.add_argument('-cf','--capping-free',action='store_true',help='Activate (experimental) capping-free mode.',dest='cappingfree')
 
     args = parser.parse_args()
 
@@ -741,7 +741,6 @@ if __name__ == '__main__':
     ch.setLevel(logging.INFO)
     ch.setFormatter(logging.Formatter('%(levelname)s\t%(asctime)s\t%(message)s'))
     LOG.addHandler(ch)
-    LOG.info("cf set to {}".format(args.cf))
     beta = args.beta
     if beta < 0:
         beta = args.alpha * 0.5
@@ -771,7 +770,7 @@ if __name__ == '__main__':
             'the tree').format(len(speciesTree)))
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
             adjacencies, telomeres, weights, penalities, genes, ext2id,
-            sep=args.separator,capping=not args.cf)
+            sep=args.separator,capping=not args.cappingfree)
 
     graphs = relationalDiagrams['graphs']
 
@@ -819,31 +818,31 @@ if __name__ == '__main__':
         circ_singletons[ident] = du.identifyCircularSingletonCandidates(G)
         LOG.info(f'identified {len(circ_singletons[ident])} circular singleton candidates')
 
-    if not args.cf:
+    if not args.cappingfree:
         caps = getAllCaps(graphs)
     # construct & output ILP
     out = stdout
 
     LOG.info('writing objective over all graphs')
-    if args.cf:
+    if args.cappingfree:
         cf_objective(graphs,circ_singletons,args.alpha,beta,out)
     else:
         objective(graphs, circ_singletons, args.alpha, beta, out)
 
     LOG.info('writing constraints...')
-    if args.cf:
+    if args.cappingfree:
         cf_constraints(graphs, siblings, circ_singletons, out)
     else:
         constraints(graphs, siblings, circ_singletons, caps, out)
 
     LOG.info('writing domains...')
-    if args.cf:
+    if args.cappingfree:
         cf_domains(graphs,out)
     else:
         domains(graphs, out)
 
     LOG.info('writing variables...')
-    if args.cf:
+    if args.cappingfree:
         cf_variables(graphs,circ_singletons,out)
     else:
         variables(graphs, circ_singletons, caps, out)
