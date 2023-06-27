@@ -636,7 +636,7 @@ def cf_variables(graphs, circ_singletons,out):
             print(' z{}_{}'.format(v, i),file=out)
             for nm in ['n','m']:
                 for tp in SUBPATHTYPES:
-                    print(' '+cf_var(mrd=i,v=v,nm=nm,tp=tp),file=out)
+                    print(' '+cf_var(mrd=i,v=v,mn=nm,tp=tp),file=out)
             for tp in PATHTYPES:
                 print(' '+reportvar(mrd=i,v=v,tp=tp),file=out)
             for j in range(len(circ_singletons[(child, parent)])):
