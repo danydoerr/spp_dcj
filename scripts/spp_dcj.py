@@ -343,7 +343,7 @@ def cfc04(G,compnum,out):
 
 def cfc05(G,compnum,out):
     #again, no difference between cf and capped version
-    return c05(G,compnum,out)
+    return c06(G,compnum,out)
 
 def cfc07(G,compnum,out,genomes):
     for v in G.nodes():
@@ -414,7 +414,7 @@ def cfc12(G,compnum,out):
         for ij in PATHTYPES:
             if ij==PTYPE_CYCLE:
                 line = ' + '.join([mvar(mrd=compnum,tp=tp,v=v) for tp in SUBPATHTYPES])
-                line+= ' + '.join([nvar(mrd=compnum,tp=tp,v=v) for tp in SUBPATHTYPES])
+                line+= ' + ' +( ' + '.join([nvar(mrd=compnum,tp=tp,v=v) for tp in SUBPATHTYPES]))
                 line+= ' + 8 {} <= 8\n'.format(reportvar(tp=PTYPE_CYCLE,mrd=compnum,v=v))
                 out.write(line)
             else:
