@@ -446,11 +446,11 @@ def cfc16(G,compnum,out):
     if numerator:
         numerator+=' + '
     numerator+=summationvar(qr='r'+INDEL_A,mrd=compnum)
-    numerator+=summationvar(qr='r'+INDEL_B,mrd=compnum)
+    numerator+=' + '+summationvar(qr='r'+INDEL_B,mrd=compnum)
     negative = ' - '.join([reportvar(mrd=compnum,v=v,tp=''.join(sorted([TELOMERE_A,TELOMERE_B]))) for v in G.nodes()])
     if negative:
         numerator+=(" - "+negative)
-    line = numerator+" - {}\n".format(summationvar(qr='q',mrd=compnum))
+    line = numerator+" - 2 {} <= 0\n".format(summationvar(qr='q',mrd=compnum))
     out.write(line)
 
 def cfc17(circ_singletons, i, out):
@@ -463,6 +463,7 @@ def cfc17(circ_singletons, i, out):
 def cf_objective(graphs,circ_singletons,alpha,beta,out):
     #TODO: What about telomeric, ie. artificial adjacencies?
     #How to get their weight?
+    out.write('maximize ')
     written=False
     adjs = set(reduce(lambda x, y: x + y, (tuple(map(lambda z: (z[2]['id'], \
             z[2]['weight']), filter(lambda x: x[2]['type'] == du.ETYPE_ADJ, \
@@ -634,6 +635,7 @@ def cf_variables(graphs, circ_singletons,out):
                 du.ETYPE_ID and '_%s' %i or ''),file=out)
         for v in G.nodes():
             print(' z{}_{}'.format(v, i),file=out)
+            print(' t{}'.format(v,i),file=out)
             for nm in ['n','m']:
                 for tp in SUBPATHTYPES:
                     print(' '+cf_var(mrd=i,v=v,mn=nm,tp=tp),file=out)
