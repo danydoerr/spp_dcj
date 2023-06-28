@@ -1,22 +1,14 @@
-INFO	2023-06-28 12:31:34,559	loading species tree from SpeciesTree.txt
-INFO	2023-06-28 12:31:34,560	loading candidate adjacencies from AdjacenciesExample1.txt, using "_" to separate gene family from uniquifying identifier
-INFO	2023-06-28 12:31:34,560	identified 6 candidate telomeres in genome A
-INFO	2023-06-28 12:31:34,560	identified 0 candidate telomeres in genome B
-INFO	2023-06-28 12:31:34,560	identified 2 candidate telomeres in genome C
-INFO	2023-06-28 12:31:34,560	constructing relational diagrams for all 2 branches of the tree
-INFO	2023-06-28 12:31:34,564	identified 0 circular singleton candidates
-INFO	2023-06-28 12:31:34,564	identified 0 circular singleton candidates
-INFO	2023-06-28 12:31:34,564	writing objective over all graphs
-INFO	2023-06-28 12:31:34,564	writing constraints...
-INFO	2023-06-28 12:31:34,564	writing constraints for relational diagram of A and B
-INFO	2023-06-28 12:31:34,566	writing constraints for relational diagram of A and C
-INFO	2023-06-28 12:31:34,567	writing domains...
-INFO	2023-06-28 12:31:34,567	writing domains for relational diagram of A and B
-INFO	2023-06-28 12:31:34,567	writing domains for relational diagram of A and C
-INFO	2023-06-28 12:31:34,567	writing variables...
-INFO	2023-06-28 12:31:34,567	writing general variables for relational diagram of A and B
-INFO	2023-06-28 12:31:34,567	writing general variables for relational diagram of A and C
-INFO	2023-06-28 12:31:34,567	writing binary variables for relational diagram of A and B
-INFO	2023-06-28 12:31:34,567	writing binary variables for relational diagram of A and C
-INFO	2023-06-28 12:31:34,567	writing ID-to-gene extremity mapping to Example1.idmap
-INFO	2023-06-28 12:31:34,567	DONE
+INFO	2023-06-28 16:11:19,288	loading species tree from SpeciesTree.txt
+INFO	2023-06-28 16:11:19,289	loading candidate adjacencies from AdjacenciesExample1.txt, using "_" to separate gene family from uniquifying identifier
+INFO	2023-06-28 16:11:19,289	identified 6 candidate telomeres in genome A
+INFO	2023-06-28 16:11:19,289	identified 0 candidate telomeres in genome B
+INFO	2023-06-28 16:11:19,289	identified 2 candidate telomeres in genome C
+INFO	2023-06-28 16:11:19,289	constructing relational diagrams for all 2 branches of the tree
+INFO	2023-06-28 16:11:19,291	identified 0 circular singleton candidates
+INFO	2023-06-28 16:11:19,291	identified 0 circular singleton candidates
+INFO	2023-06-28 16:11:19,291	writing objective over all graphs
+INFO	2023-06-28 16:11:19,291	writing constraints...
+Traceback (most recent call last):
+  File "../../scripts/spp_dcj.py", line 860, in <module>
+    constraints(graphs, siblings, circ_singletons, caps, out,adjust_caps=args.adjucaps)
+TypeError: constraints() got an unexpected keyword argument 'adjust_caps'

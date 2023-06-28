@@ -31,7 +31,7 @@ LOG.setLevel(logging.DEBUG)
 # ILP OBJECTIVE
 #
 
-def objective(graphs, circ_singletons, alpha, beta, out):
+def objective(graphs, circ_singletons, alpha, beta, out,fullform=False):
     out.write('maximize ')
 
     # sum of adjacency weights over all genomes
@@ -64,6 +64,8 @@ def objective(graphs, circ_singletons, alpha, beta, out):
             x[2]['type'] == du.ETYPE_ADJ, G.edges(data = True)))) for i, (_, G) in \
             enumerate(sorted(graphs.items()))))):
         out.write(f' - {weight * beta} x{adj}')
+    if fullform:
+        write_missing_formula(graphs,alpha,out)
 
     out.write('\n\n')
 
@@ -337,9 +339,15 @@ def cfc03(siblings,out):
     return c03(siblings,out)
 
 
-def cfc04(G,compnum,out):
-    #again, no difference between cf and capped version
-    return c04(G,compnum,out)
+def cfc04(G,i,out):
+    for u, v, data in G.edges(data = True):
+        if data['type']==du.ETYPE_ID:
+            #indel edges only exist 'virtually'
+            continue
+        out.write('y{0}_{3} - y{1}_{3} + {0} x{2} <= {0}\n'.format(u, v,
+            data['id'], i))
+        out.write('y{1}_{3} - y{0}_{3} + {1} x{2} <= {1}\n'.format(u, v,
+            data['id'], i))
 
 def cfc05(G,compnum,out):
     #again, no difference between cf and capped version
@@ -364,7 +372,7 @@ def cfc06(G,compnum,out,genomes):
             sptype = TELOMERE_A
         else:
             sptype = TELOMERE_B
-        line='t_{} - {} <= 0\n'.format(v,mvar(mrd=compnum,tp=sptype,v=v))
+        line='t{} - {} <= 0\n'.format(v,nvar(mrd=compnum,tp=sptype,v=v))
         out.write(line)
 
 def cfc08(G,compnum,out):
@@ -460,7 +468,7 @@ def cfc17(circ_singletons, i, out):
 
 
 
-def cf_objective(graphs,circ_singletons,alpha,beta,out):
+def cf_objective(graphs,circ_singletons,alpha,beta,out,fullform=False):
     #TODO: What about telomeric, ie. artificial adjacencies?
     #How to get their weight?
     out.write('maximize ')
@@ -506,7 +514,15 @@ def cf_objective(graphs,circ_singletons,alpha,beta,out):
     if len(tlpens)>0:
         out.write(' - ')
     out.write(' - '.join(tlpens))
+    if fullform:
+        write_missing_formula(graphs, alpha, out)
     out.write('\n\n')
+
+def write_missing_formula(graphs, alpha, out):
+    ns = ['{} x{}'.format(0.5*alpha,data['id']) for _,G in graphs.items() for _,_,data in G.edges(data=True) if data['type']==du.ETYPE_EXTR]
+    if ns:
+        out.write(' - ')
+        out.write(' - '.join(ns))
     
 
 
@@ -538,7 +554,14 @@ def domains(graphs, out):
 
 def cf_domains(graphs,out):
     #This should be the same as only y has a domain beyond binary/general, which both ILPs share
-    return domains(graphs,out)
+    out.write('bounds\n')
+    for i, ((child, parent), G) in enumerate(sorted(graphs.items())):
+        LOG.info(('writing domains for relational diagram of {} and ' + \
+                '{}').format(child, parent))
+        d02(G, i, out)
+    for i,_ in enumerate(sorted(graphs.items())):
+        print('{} free'.format(summationvar(qr='q',mrd=i)))
+    out.write('\n')
 
 def d02(G, i, out):
 
@@ -737,6 +760,7 @@ if __name__ == '__main__':
             help='Separator of in gene names to split <family ID> and ' +
                     '<uniquifying identifier> in adjacencies file')
     
+    parser.add_argument('--full-formula',action='store_true',dest='fullformula',help='Use the full DCJ-indel distance formula, i.e. include the number of markers.')
     parser.add_argument('-cf','--capping-free',action='store_true',help='Activate (experimental) capping-free mode.',dest='cappingfree')
 
     args = parser.parse_args()
@@ -776,6 +800,7 @@ if __name__ == '__main__':
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
             adjacencies, telomeres, weights, penalities, genes, ext2id,
             sep=args.separator,capping=not args.cappingfree)
+                               #TODO: find out what vertices may be telomeres actually
 
     graphs = relationalDiagrams['graphs']
 
@@ -830,9 +855,9 @@ if __name__ == '__main__':
 
     LOG.info('writing objective over all graphs')
     if args.cappingfree:
-        cf_objective(graphs,circ_singletons,args.alpha,beta,out)
+        cf_objective(graphs,circ_singletons,args.alpha,beta,out,fullform=args.fullformula)
     else:
-        objective(graphs, circ_singletons, args.alpha, beta, out)
+        objective(graphs, circ_singletons, args.alpha, beta, out,fullform=args.fullformula)
 
     LOG.info('writing constraints...')
     if args.cappingfree:
