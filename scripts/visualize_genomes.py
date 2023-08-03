@@ -30,8 +30,10 @@ def constructGenomeGraph(adjacencies, genes):
         G.add_edge(ext1, ext2, type=du.ETYPE_ADJ)
 
     for gene in genes:
-        G.add_edge((gene, du.EXTR_HEAD), (gene, du.EXTR_TAIL),
-                type=du.ETYPE_ID)
+        # ignore telomeres
+        if not gene.startswith('t_'):
+            G.add_edge((gene, du.EXTR_HEAD), (gene, du.EXTR_TAIL),
+                    type=du.ETYPE_ID)
     return G
 
 

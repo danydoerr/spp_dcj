@@ -87,7 +87,7 @@ if __name__ == '__main__':
     LOG.info(('constructing relational diagrams for all {} branches of ' + \
             'the tree').format(len(speciesTree)))
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
-            adjacencies, telomeres, weights, genes, ext2id)
+            adjacencies, telomeres, weights, defaultdict(dict), genes, ext2id)
 
     graphs = relationalDiagrams['graphs']
 
