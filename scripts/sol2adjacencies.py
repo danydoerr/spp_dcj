@@ -3,6 +3,7 @@
 # import from built-in packages
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter as ADHF, FileType
 from sys import stdout, stderr, exit
+from collections import defaultdict
 import csv
 import re
 
@@ -30,7 +31,7 @@ if __name__ == '__main__':
         if line:
             id2ext[line[0]] = tuple(line[1:])
 
-    adjacenciesList, _, weightsDict, _, _, _ = du.parseSOL(args.sol_file, id2ext)
+    adjacenciesList, _, _, _, _ = du.parseSOL(args.sol_file, id2ext)
 
     # write adjacencies
-    du.writeAdjacencies(adjacenciesList, weightsDict, stdout)
+    du.writeAdjacencies(adjacenciesList, defaultdict(lambda: defaultdict(lambda: 0)), stdout)
