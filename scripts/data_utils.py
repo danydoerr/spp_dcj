@@ -38,9 +38,12 @@ SIGN2EXT_2      = {ORIENT_NEGATIVE:EXTR_HEAD,ORIENT_POSITIVE:EXTR_TAIL}
 EXT2SIGN_1      = {EXTR_TAIL:ORIENT_NEGATIVE,EXTR_HEAD:ORIENT_POSITIVE}
 EXT2SIGN_2      = {EXTR_TAIL:ORIENT_POSITIVE,EXTR_HEAD:ORIENT_NEGATIVE}
 
-EXT_COMPLEMENT = {EXTR_HEAD:EXTR_TAIL,EXTR_TAIL:EXTR_HEAD}
+EXT_COMPLEMENT  = {EXTR_HEAD:EXTR_TAIL,EXTR_TAIL:EXTR_HEAD}
 
-TRUE_ADJ_WEIGHT  = 1
+TRUE_ADJ_WEIGHT = 1
+
+COUNT_SATURATED = 'fixed'
+COUNT_DYNAMIC   = 'range'
 
 DEFAULT_GENE_FAM_SEP = '_'
 
@@ -101,6 +104,48 @@ def getFamiliesFromGenes(genesList,speciesList, sep=DEFAULT_GENE_FAM_SEP):
     return(resFamilies)
 
 
+def parseFamilyCount(data):
+    '''Read table that reports count estimates for ancestral genes. The table
+    must be in a tab-separated-values file format, with rows corresponding to
+    gene families and columns to ancestral nodes. It must have a header line
+    that identifies the names of the ancestral nodes matching the identifiers
+    in the adjacencies file. Each entry in the table is either a non-negative
+    integer, or two non-negative integers delimited by '-', e.g. '1-2',
+    indicating a range (right bound is inclusive) of admissible sizes of the
+    given gene family in the given species.
+
+    @returns a dictionary of dictionaries, where the first key is species and
+    the second gene family; the value is a tuple describing the minimum and
+    maximum (inclusive) gene family count'''
+    isHeader = True
+    validCount = re.compile('^\d+|(\d+-\d+)$')
+    res = dict()
+    header = []
+    for x, line in enumerate(csv.reader(data, delimiter='\t')):
+        if isHeader:
+            header = line[1:]
+            for c in header:
+                res[c] = defaultdict(lambda: (0, 0))
+            isHeader = False
+        else:
+            for i, val in enumerate(line[1:]):
+                if validCount.match(val) is None:
+                    print(f'ERROR: unable to process size "{val}" for ' + \
+                            f'family {line[0]} of species {header[i]} in ' + \
+                            f'family count table line {x+1}. Exiting.')
+                    exit(1)
+                c_min = 0
+                c_max = 0
+                if '-' in val:
+                    c_min, c_max = map(int, val.split('-'))
+                else:
+                    c_min = c_max = int(val)
+                if c_min + c_max > 0:
+                    res[header[i]][line[0]] = (c_min, c_max)
+
+    return res
+
+
 def addAdjacency(ext1,ext2,weight,resAdjacencies,resWeights,resGenes):
     if ext1>ext2:
         ext1,ext2=ext2,ext1
@@ -113,40 +158,36 @@ def addAdjacency(ext1,ext2,weight,resAdjacencies,resWeights,resGenes):
 
 
 def parseAdjacencies(data, sep=DEFAULT_GENE_FAM_SEP):
-    '''Read a file of adjacencies in the format species\tgene1\text1\tspecies\tgene2\text2\tweight'''
+    '''Read a file of adjacencies in the format species\tgene1\text1\tgene2\text2\tweight'''
     headerMark = '#'
     delimiter = '\t'
     resAdjacencies = defaultdict(list)
     resGenes       = defaultdict(list)
     resWeights     = defaultdict(dict)
-    resPenalities  = {}
     for line in csv.reader(data, delimiter = delimiter):
         if line[0][0] != headerMark:
             species  = line[0]
             gene1    = line[1]
             ext1     = (gene1,line[2])
-            gene2    = line[4]
-            ext2     = (gene2,line[5])
-            weight   = float(line[6])
+            gene2    = line[3]
+            ext2     = (gene2,line[4])
+            weight   = float(line[5])
             if (gene1, ext1) == (gene2, ext2):
                 print(f'WARNING: adjacency between the same extremity is not '
-                        f'feasible, skipping {line[1]}:{line[2]}-{line[4]}:{line[5]}',
+                        f'feasible, skipping {gene1}:{ext1}-{gene2}:{ext2}',
                         file=stderr)
             else:
-                addAdjacency(ext1,ext2,weight,resAdjacencies[species],resWeights[species],resGenes[species])
-
-            # optional penality
-            if len(line) > 7 and line[7]:
-                resPenalities[ext1 > ext2 and (ext2, ext1) or (ext1, ext2)] = float(line[7])
+                addAdjacency(ext1, ext2, weight, resAdjacencies[species],
+                             resWeights[species], resGenes[species])
 
     speciesList = list(resAdjacencies.keys())
     for species in speciesList:
-        resGenes[species]    = list(set(resGenes[species]))
+        resGenes[species] = list(set(resGenes[species]))
     resFamilies = getFamiliesFromGenes(resGenes, speciesList, sep=sep)
 
     return {'species':speciesList, 'genes':resGenes,
             'adjacencies':resAdjacencies, 'weights':resWeights,
-            'families': resFamilies, 'penalities': resPenalities}
+            'families': resFamilies}
 
 
 def parseCandidateAdjacencies(data, sep=DEFAULT_GENE_FAM_SEP):
@@ -513,7 +554,7 @@ def mapFamiliesToGenes(genes, sep=DEFAULT_GENE_FAM_SEP):
 
 
 def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
-        candidatePenalities, extremityIdManager):
+        extremityIdManager):
     ''' create adjacencies of the genome named <gName>'''
     for ext1, ext2 in adjacencies:
         id1 = extremityIdManager.getId((gName, ext1))
@@ -522,12 +563,7 @@ def _constructRDAdjacencyEdges(G, gName, adjacencies, candidateWeights,
         # ensure that each edge has a unique identifier
         edge_id = '{}_{}'.format(*sorted((id1, id2)))
         weight = candidateWeights[gName].get((ext1, ext2), 0)
-        penality = candidatePenalities[gName].get((ext1, ext2), None)
-        if penality is None:
-            G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight)
-        else:
-            G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight,
-                    penality=penality)
+        G.add_edge(id1, id2, type=ETYPE_ADJ, id=edge_id, weight=weight)
 
 
 def _constructNaiveRDCapping(G, gName1, gName2, extremityIdManager):
@@ -568,7 +604,8 @@ def _fillUpCaps(G, gName, ncaps, extremityIdManager):
         id_ = 't{}'.format(extremityIdManager._IdManager__count)
         v = extremityIdManager.getId((gName, (id_, EXTR_HEAD)))
         new_caps.append(v)
-        G.add_node(v, id=(gName, (id_, EXTR_HEAD)), type=VTYPE_CAP)
+        G.add_node(v, id=(gName, (id_, EXTR_HEAD)), type=VTYPE_CAP,
+                   count_state=COUNT_DYNAMIC)
 
     for i in range(0, ncaps-1, 2):
         id1 = new_caps[i]
@@ -834,17 +871,23 @@ def _constructRDExtremityEdges(G, gName1, gName2, genes, fam2genes1,
     return siblings
 
 
-def _constructRDNodes(G, gName, genes, extremityIdManager):
+def _constructRDNodes(G, gName, genes, counts, extremityIdManager):
     ''' create gene extremity nodes for the genome named <gName> '''
-    for extr in (EXTR_HEAD, EXTR_TAIL):
+    for extr, other_extr in ((EXTR_HEAD, EXTR_TAIL), (EXTR_TAIL, EXTR_HEAD)):
+
         G.add_nodes_from(((extremityIdManager.getId((gName, (g, extr))),
-            dict(id=((gName, (g, extr))), type=VTYPE_EXTR)) for g in genes))
+                            dict(id=((gName, (g, extr))), 
+                                 type=VTYPE_EXTR,
+                                 count_state=counts[g][2], 
+                                 sibling=extremityIdManager.getId((gName, (g, other_extr)))))
+                          for g in genes))
 
 
 def _constructRDTelomeres(G, gName, telomeres, extremityIdManager):
     ''' create telomereic extremity nodes for the genome named <gName> '''
     G.add_nodes_from(((extremityIdManager.getId((gName, (t, 'o'))),
-        dict(id=((gName, (t, 'o'))), type=VTYPE_CAP)) for t in telomeres))
+        dict(id=((gName, (t, 'o'))), type=VTYPE_CAP,
+             count_state=COUNT_DYNAMIC)) for t in telomeres))
 
 
 def hasIncidentAdjacencyEdges(G, v):
@@ -867,7 +910,7 @@ def getIncidentAdjacencyEdges(G, v):
 
 
 def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
-        candidateWeights, candidatePenalities, genes, extremityIdManager,
+        candidateWeights, genes, familyCounts, extremityIdManager,
         sep=DEFAULT_GENE_FAM_SEP):
     ''' constructs for each edge of the tree a relational diagram of the
     adjacent genomes'''
@@ -878,11 +921,11 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
         G = nx.MultiGraph()
 
         for gName in (child, parent):
-            _constructRDNodes(G, gName, genes[gName], extremityIdManager)
+            _constructRDNodes(G, gName, genes[gName], familyCounts[gName], extremityIdManager)
             _constructRDTelomeres(G, gName, candidateTelomeres[gName],
                                   extremityIdManager)
             _constructRDAdjacencyEdges(G, gName, candidateAdjacencies[gName],
-                    candidateWeights, candidatePenalities, extremityIdManager)
+                    candidateWeights, extremityIdManager)
 
         fam2genes1 = mapFamiliesToGenes(genes[child], sep=sep)
         fam2genes2 = mapFamiliesToGenes(genes[parent], sep=sep)
@@ -911,7 +954,7 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
 
 def writeAdjacencies(adjacenciesList, weightsDict, out):
     ''' Write an adjacency file '''
-    out.write('#Species Gene_1 Ext_1 Species Gene_2 Ext_2 Weight\n')
+    out.write('#Species Gene_1 Ext_1 Gene_2 Ext_2 Weight\n')
     speciesList = adjacenciesList.keys()
     for species in speciesList:
         for [(gene1,ext1),(gene2,ext2)] in adjacenciesList[species]:
@@ -919,7 +962,6 @@ def writeAdjacencies(adjacenciesList, weightsDict, out):
                 species,
                 gene1,
                 ext1,
-                species,
                 gene2,
                 ext2,
                 str(weightsDict[species][(gene1,ext1), (gene2,ext2)])])+'\n')

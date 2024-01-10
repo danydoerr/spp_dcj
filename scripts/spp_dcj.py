@@ -59,11 +59,11 @@ def objective(graphs, circ_singletons, alpha, beta, out):
         # subtract circular singleton penality
         out.write(' - '.join(('{} s{}_{}'.format(alpha, j, i) for j in range(len(cs)))))
 
-    for adj, weight in set(reduce(lambda x, y: x + y, (tuple(map(lambda z: (z[2]['id'], \
-            z[2]['penality']), filter(lambda x: 'penality' in x[2] and \
-            x[2]['type'] == du.ETYPE_ADJ, G.edges(data = True)))) for i, (_, G) in \
-            enumerate(sorted(graphs.items()))))):
-        out.write(f' - {weight * beta} x{adj}')
+#    for adj, weight in set(reduce(lambda x, y: x + y, (tuple(map(lambda z: (z[2]['id'], \
+#            z[2]['penality']), filter(lambda x: 'penality' in x[2] and \
+#            x[2]['type'] == du.ETYPE_ADJ, G.edges(data = True)))) for i, (_, G) in \
+#            enumerate(sorted(graphs.items()))))):
+#        out.write(f' - {weight * beta} x{adj}')
 
     out.write('\n\n')
 
@@ -72,7 +72,7 @@ def objective(graphs, circ_singletons, alpha, beta, out):
 # ILP CONSTRAINTS
 #
 
-def constraints(graphs, siblings, circ_singletons, caps, out):
+def constraints(graphs, siblings, circ_singletons, caps, counts, sep, out):
 
     out.write('subject to\n')
 
@@ -93,11 +93,31 @@ def constraints(graphs, siblings, circ_singletons, caps, out):
         c11(G, i, out)
         c12(circ_singletons[(child, parent)], i, out)
         c13(caps, out)
+        c14(G, counts, sep, out)
 
     out.write('\n')
 
 
 def c01(G, out):
+    # activate nodes that are already saturated from the get-go:
+    for v, data in G.nodes(data = True):
+        (gName, (g, extr)) = data['id']
+        st = data['count_state']
+        if st == du.COUNT_SATURATED:
+            print(f'o{v} = 1', file=out)
+        elif st == du.COUNT_DYNAMIC:
+            if data['type'] == du.VTYPE_EXTR and extr == du.EXTR_HEAD:
+                # make it easy for the solver and synchronize state across gene
+                # extremities 
+                print(f'o{v} = o{data["sibling"]}')
+        else:
+            raise Exception(f'unknown count state {st} of node {v}')
+
+def c02(G, i, out):
+    # XXX i is not the i of the formula in the paper, but the index of the
+    # pairwise comparison!
+
+    # ensure that active nodes are incident to exactly one adjacency edge
     for v, vdata in G.nodes(data = True):
         line = ''
         for u in G.neighbors(v):
@@ -106,34 +126,21 @@ def c01(G, out):
                 if data['type'] == du.ETYPE_ADJ:
                     line += line and ' + '
                     line += 'x{}'.format(data['id'])
-        if line:
-            if vdata['type'] == du.VTYPE_EXTR:
-                line += ' = 1\n'
-            elif vdata['type'] == du.VTYPE_CAP:
-                line += ' - o{} = 0\n'.format(v)
-            else:
-                raise Exception('unknown node type!')
+        line += ' - o{} = 0\n'.format(v)
+        out.write(line)
 
-            out.write(line)
-
-
-def c02(G, i, out):
-    # XXX i is not the i of the formula in the paper, but the index of the
-    # pairwise comparison!
+    # ensure that active nodes are incident to exactly one marker XOR extremity
+    # edge
     for v in G.nodes():
         line = ''
         for u in G.neighbors(v):
             # two vertices may share multiple edges
             for data in G[u][v].values():
-                line += line and ' + '
-                line += 'x{}{}'.format(data['id'], data['type'] ==
-                        du.ETYPE_ID and '_%s' %i or '')
-        if G.nodes[v]['type'] == du.VTYPE_EXTR:
-            line += ' = 2\n'
-        elif G.nodes[v]['type'] == du.VTYPE_CAP:
-            line += ' - 2 o{} = 0\n'.format(v)
-        else:
-            raise Exception('unknown node type!')
+                if data['type'] in (du.ETYPE_ID, du.ETYPE_EXTR):
+                    line += line and ' + '
+                    line += 'x{}{}'.format(data['id'], data['type'] ==
+                            du.ETYPE_ID and '_%s' %i or '')
+        line += ' - o{} = 0\n'.format(v)
         out.write(line)
 
 
@@ -237,6 +244,7 @@ def c11(G, i, out):
         if data['type'] == du.VTYPE_CAP:
             out.write('z{0}_{1} = 0\n'.format(v, i))
 
+
 def c12(circ_singletons, i, out):
 
     for j, path in enumerate(circ_singletons.values()):
@@ -244,6 +252,7 @@ def c12(circ_singletons, i, out):
             du.ETYPE_ID and '_%s' %i or '') for data in path]
         print('{} - s{}_{} <= {}'.format(' + '.join(component_vars), j, i,
             len(component_vars)-1), file = out)
+
 
 def c13(caps, out):
 
@@ -253,6 +262,21 @@ def c13(caps, out):
         if cap_set:
             print('{} - 2 a{} = 0'.format(' + '.join(map(lambda x: f'o{x}',
                 cap_set)), j), file = out)
+
+
+def c14(G, counts, sep, out):
+
+    fam2node = defaultdict(lambda: defaultdict(list))
+    for v, (gName, (g, extr)) in G.nodes(data = 'id'):
+        fam2node[gName][du.getFamily(g, sep)].append(v)
+
+    for gName, families in fam2node.items():
+        for f, (c_min, c_max, state) in counts[gName].items():
+            if state == du.COUNT_DYNAMIC:
+                gene_sum = ' + '.join(map(lambda x: f'o{x}', families[f]))
+                # each gene has two vertices, hence multiply by 2
+                print(f'{gene_sum} >= {2*c_min}', file=out)
+                print(f'{gene_sum} <= {2*c_max}', file=out)
 
 
 def getAllCaps(graphs):
@@ -345,9 +369,8 @@ def variables(graphs, circ_singletons, caps, out):
             variables.add('t{}_{}'.format(data['id'], i))
 
         # D.06
-        for v, type_ in G.nodes(data='type'):
-            if type_ == du.VTYPE_CAP:
-                variables.add('o{}'.format(v))
+        for v in G.nodes():
+            variables.add('o{}'.format(v))
 
         # D.07
         for j in range(len(circ_singletons[(child, parent)])):
@@ -449,6 +472,12 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--separator', default = du.DEFAULT_GENE_FAM_SEP, \
             help='Separator of in gene names to split <family ID> and ' +
                     '<uniquifying identifier> in adjacencies file')
+    parser.add_argument('-c', '--count_table', type=open,
+            help='Gene family count table indicating a fixed gene family ' + \
+                    'size or a range of admissible sizes for each gene ' + \
+                    'family in each ancestral genome. If no table is ' + \
+                    'specified, the genes in specified in the adjacencies ' + \
+                    'file determine the family size')
 
     args = parser.parse_args()
 
@@ -480,13 +509,47 @@ if __name__ == '__main__':
     genes = candidateAdjacencies['genes']
     adjacencies = candidateAdjacencies['adjacencies']
     weights = candidateAdjacencies['weights']
-    penalities = candidateAdjacencies['penalities']
+
+    actualCounts = dict()
+    for sp, sp_genes in genes.items():
+        actualCounts[sp] = defaultdict(lambda: 0)
+        for gene in sp_genes:
+            f = gene.split(args.separator)[0]
+            actualCounts[sp][f] += 1
+
+    targetCounts = dict()
+    if args.count_table:
+        familyCounts = du.parseFamilyCount(args.count_table)
+        for sp, sp_counts in familyCounts.items():
+            targetCounts[sp] = defaultdict(lambda: (0, 0, du.COUNT_SATURATED))
+            for g, (c_min, c_max) in sp_counts.items():
+                if g == 't':
+                    continue
+                if c_min > actualCounts[sp][g]:
+                    LOG.fatal(f'minimum count constraint for family {g}' + \
+                            f' than genes provided in the adjacencies file,' + \
+                            f' exiting')
+                    exit(1)
+                if c_max > actualCounts[sp][g]:
+                    LOG.fatal(f'maximum count constraint for family {g}' + \
+                            f' than genes provided in the adjacencies file')
+                    c_max = actualCounts[sp][g]
+
+                if c_min == actualCounts[sp][g]:
+                    targetCounts[sp][g] = (c_min, c_max, du.COUNT_SATURATED)
+                else:
+                    targetCounts[sp][g] = (c_min, c_max, du.COUNT_DYNAMIC)
+    else:
+        for sp, sp_counts in actualCounts.items():
+            targetCounts[sp] = defaultdict(lambda: (0, 0, du.COUNT_SATURATED))
+            targetCounts[sp].update(((g, (c, c, du.COUNT_SATURATED)) for (g, c) in
+                                     sp_counts.items()))
 
     ext2id = du.IdManager()
     LOG.info(('constructing relational diagrams for all {} branches of ' + \
             'the tree').format(len(speciesTree)))
     relationalDiagrams = du.constructRelationalDiagrams(speciesTree,
-            adjacencies, telomeres, weights, penalities, genes, ext2id,
+            adjacencies, telomeres, weights, genes, targetCounts, ext2id,
             sep=args.separator)
 
     graphs = relationalDiagrams['graphs']
@@ -543,7 +606,8 @@ if __name__ == '__main__':
     objective(graphs, circ_singletons, args.alpha, beta, out)
 
     LOG.info('writing constraints...')
-    constraints(graphs, siblings, circ_singletons, caps, out)
+    constraints(graphs, siblings, circ_singletons, caps, targetCounts,
+                args.separator, out)
 
     LOG.info('writing domains...')
     domains(graphs, out)
