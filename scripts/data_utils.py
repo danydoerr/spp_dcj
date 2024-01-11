@@ -601,8 +601,8 @@ def _addCartesianProductCaps(G, gName1, gName2, caps, extremityIdManager):
 def _fillUpCaps(G, gName, ncaps, extremityIdManager):
     new_caps = list()
     for _ in range(ncaps):
-        id_ = 't{}'.format(extremityIdManager._IdManager__count)
-        v = extremityIdManager.getId((gName, (id_, EXTR_HEAD)))
+        id_ = 't_{}'.format(extremityIdManager._IdManager__count)
+        v = extremityIdManager.getId((gName, (id_, EXTR_CAP)))
         new_caps.append(v)
         G.add_node(v, id=(gName, (id_, EXTR_HEAD)), type=VTYPE_CAP,
                    count_state=COUNT_DYNAMIC)
