@@ -136,7 +136,7 @@ if __name__ == '__main__':
         if line:
             id2ext[line[0]] = tuple(line[1:])
 
-    adjacenciesList, indelList, _, matchingList, _, vars_ = \
+    adjacenciesList, indelList, matchingList, _, vars_ = \
             du.parseSOL(args.sol_file, id2ext)
 
     G = constructGraph(vars_)
