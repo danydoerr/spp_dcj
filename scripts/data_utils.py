@@ -434,7 +434,8 @@ def adjacencies2unimog(adjacenciesList, matchingList):
                 if chr_:
                     chrs.append((isLinear and CHR_LINEAR or CHR_CIRCULAR, chr_))
                 elif not all(map(lambda x: x[0][1:].isdigit(), C)):
-                    raise Exception(f'chromosome {C} is empty')
+                    pass
+                    #raise Exception(f'chromosome {C} is empty')
             else:
                 raise Exception(f'genome {gName} is not linear/circular')
         genomes.append((gName, chrs))
