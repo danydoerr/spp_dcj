@@ -434,8 +434,7 @@ def adjacencies2unimog(adjacenciesList, matchingList):
                 if chr_:
                     chrs.append((isLinear and CHR_LINEAR or CHR_CIRCULAR, chr_))
                 elif not all(map(lambda x: x[0][1:].isdigit(), C)):
-                    pass
-                    #raise Exception(f'chromosome {C} is empty')
+                    raise Exception(f'chromosome {C} is empty')
             else:
                 raise Exception(f'genome {gName} is not linear/circular')
         genomes.append((gName, chrs))
@@ -605,7 +604,7 @@ def _fillUpCaps(G, gName, ncaps, extremityIdManager):
         id_ = 't_{}'.format(extremityIdManager._IdManager__count)
         v = extremityIdManager.getId((gName, (id_, EXTR_CAP)))
         new_caps.append(v)
-        G.add_node(v, id=(gName, (id_, EXTR_HEAD)), type=VTYPE_CAP,
+        G.add_node(v, id=(gName, (id_, EXTR_CAP)), type=VTYPE_CAP,
                    count_state=COUNT_DYNAMIC)
 
     for i in range(0, ncaps-1, 2):
@@ -886,8 +885,8 @@ def _constructRDNodes(G, gName, genes, counts, extremityIdManager):
 
 def _constructRDTelomeres(G, gName, telomeres, extremityIdManager):
     ''' create telomereic extremity nodes for the genome named <gName> '''
-    G.add_nodes_from(((extremityIdManager.getId((gName, (t, 'o'))),
-        dict(id=((gName, (t, 'o'))), type=VTYPE_CAP,
+    G.add_nodes_from(((extremityIdManager.getId((gName, (t, EXTR_CAP))),
+        dict(id=((gName, (t, EXTR_CAP))), type=VTYPE_CAP,
              count_state=COUNT_DYNAMIC)) for t in telomeres))
 
 
