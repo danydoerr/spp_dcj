@@ -376,7 +376,7 @@ def unimog2adjacencies(genome):
 
     return res
 
-def adjacencies2unimog(adjacenciesList, matchingList):
+def adjacencies2unimog(adjacenciesList, matchingList, telomeres):
 
     genomes = list()
     #
@@ -384,8 +384,7 @@ def adjacencies2unimog(adjacenciesList, matchingList):
     #
     node2fam = lambda x: x[1][:x[1].find('_')]
     famG = nx.Graph(matchingList)
-    famC = dict((node2fam(x), 1) for x in famG.nodes() if not
-            x[1].startswith('t'))
+    famC = dict((node2fam(x), 1) for x in famG.nodes() if x[1] not in telomeres[x[0]])
     for C in nx.connected_components(famG):
         f = node2fam(tuple(C)[0])
         # skip telomeres
@@ -401,7 +400,7 @@ def adjacencies2unimog(adjacenciesList, matchingList):
         for adj in adjs:
             for g, ext in adj:
                 # iterate through tail extremities, add genes
-                if not g.startswith('t') and ext == EXTR_TAIL:
+                if ext == EXTR_TAIL:
                     G.add_edge((g, EXTR_TAIL), (g, EXTR_HEAD))
         chrs = list()
         for C in nx.connected_components(G):
@@ -418,19 +417,23 @@ def adjacencies2unimog(adjacenciesList, matchingList):
                     if len(path) > 2 and path[0][0][0] == path[1][0][0]:
                         path = path[1:] + path[:1]
                 chr_ = list()
-                for i in range(0, len(path), 2):
+
+                if [path[i][1] for i in range(isLinear and 1 or 0, len(path)-1, 2)].count(EXTR_HEAD) > len(path)/4:
+                    path.reverse()
+
+                for i in range(isLinear and 1 or 0, len(path)-1, 2):
                     u = path[i]
-                    if u[0].startswith('t'):
-                        continue
                     if (gName, u[0]) not in famG:
                         g = f'x_{u[0][:u[0].find("_")]}'
                     else:
                         g = '_'.join((u[0][:u[0].find('_')],
                             str(famG.nodes[(gName, u[0])]['id'])))
-                    if u[1] == EXTR_HEAD:
+                    if u[1] == EXTR_TAIL:
                         chr_.append((ORIENT_POSITIVE, g))
-                    elif u[1] == EXTR_TAIL:
+                    elif u[1] == EXTR_HEAD:
                         chr_.append((ORIENT_NEGATIVE, g))
+                    else:
+                        raise Exception(f'unexpected extremity {u[1]}')
                 if chr_:
                     chrs.append((isLinear and CHR_LINEAR or CHR_CIRCULAR, chr_))
                 elif not all(map(lambda x: x[0][1:].isdigit(), C)):
@@ -955,17 +958,21 @@ def constructRelationalDiagrams(tree, candidateAdjacencies, candidateTelomeres,
 
 def writeAdjacencies(adjacenciesList, weightsDict, out):
     ''' Write an adjacency file '''
-    out.write('#Species Gene_1 Ext_1 Gene_2 Ext_2 Weight\n')
+    out.write('#Species\tGene_1\tExt_1\tGene_2\tExt_2\tWeight\n')
     speciesList = adjacenciesList.keys()
     for species in speciesList:
         for [(gene1,ext1),(gene2,ext2)] in adjacenciesList[species]:
+            # canonicalize adjacencies list
+            w = weightsDict[species][(gene1,ext1), (gene2,ext2)]
+            if (gene1, ext1) > (gene2, ext2):
+                gene1, ext1, gene2, ext2 = gene2, ext2, gene1, ext1
             out.write('\t'.join([
                 species,
                 gene1,
                 ext1,
                 gene2,
                 ext2,
-                str(weightsDict[species][(gene1,ext1), (gene2,ext2)])])+'\n')
+                str(w)])+'\n')
 
 
 #
