@@ -21,15 +21,13 @@ def calculateDCJindelDistance(vars_, n_star):
 
     for var_, val in vars_.items():
         val = int(round(val))
-        if var_.startswith('z') and val == 1:
+        if var_.startswith('z') and val > .9:
             z += 1
-        if var_.startswith('s') and val == 1:
+        if var_.startswith('s') and val > .9:
             s += 1
-        if var_.startswith('t') and val == 1:
+        if var_.startswith('t') and val > .9:
             t += 1
-        if var_.startswith('o') and val == 1:
-            o += 1
-    return n_star + o/4 - z + t/2 +s
+    return n_star - z + t/2 +s
 
 
 def _add_edge(G, id_, **attr):
@@ -106,11 +104,11 @@ def constructGraph(vars_):
         if val:
             if var_.startswith('x'):
                 _add_edge(G, var_[1:])
-            if var_.startswith('z') and val == 1:
+            if var_.startswith('z') and val > .9:
                 G.add_node(var_[1:var_.find('_')], z = 1)
-            if var_.startswith('t') and val == 1:
+            if var_.startswith('t') and val > .9:
                 _add_edge(G, var_[1:var_.rfind('_')], t = 1)
-            if var_.startswith('o') and val == 1:
+            if var_.startswith('o') and val > .9:
                 G.add_node(var_[1:], o = 1)
 
     return G
@@ -141,7 +139,7 @@ if __name__ == '__main__':
 
     G = constructGraph(vars_)
     annotateGraph(G, id2ext)
-#    checkConsistency(G)
+    # checkConsistency(G)
 
 
 #    from matplotlib import pylab as plt
@@ -157,9 +155,13 @@ if __name__ == '__main__':
 #    plt.show()
 #    import pdb; pdb.set_trace() 
 
-    genomes = du.adjacencies2unimog(adjacenciesList, matchingList)
+    telomeres = {x: set() for x in adjacenciesList.keys()}
+    for (gName, g, ext) in id2ext.values():
+        if ext == du.EXTR_CAP:
+            telomeres[gName].add(g)
+    genomes = du.adjacencies2unimog(adjacenciesList, matchingList, telomeres)
     genomes.sort()
-    n_star = len([x for x in matchingList if not x[0][1].startswith('t')])
+    n_star = len([x for x in matchingList if not x[1][1].startswith('t')]) + len([x for x in matchingList if x[1][1].startswith('t')])/2
     #p_star = len(matchingList) - n_star
     ddcj = calculateDCJindelDistance(vars_, n_star)
     print(f'DCJ INDEL distance is {ddcj}', file=stderr)
