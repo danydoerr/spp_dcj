@@ -342,8 +342,9 @@ def parseUniMoG(data, genomesOnly=None):
                     line[:-1].split()))))
     return res
 
-def unimog2adjacencies(genome):
+def unimog2adjacencies(genome, append_occurrence=True):
 
+    ao = append_occurrence
     occ = dict()
     res = list()
 
@@ -361,18 +362,18 @@ def unimog2adjacencies(genome):
             (o1, g1), (o2, g2) = chr_[1][i:i+2]
             if g2 not in occ:
                 occ[g2] = 0
-            res.append(((f'{g1}_{occ[g1]}', SIGN2EXT_1[o1]),
-                (f'{g2}_{occ[g2]+1}', SIGN2EXT_2[o2])))
+            res.append(((f'{g1}' + (ao and f'_{occ[g1]}' or ''), SIGN2EXT_1[o1]),
+                (f'{g2}' + (ao and f'_{occ[g2]+1}' or ''), SIGN2EXT_2[o2])))
             # increase counter only after-the-fact, in case g1==g2
             occ[g2] += 1
 
         (o1, g1), (o2, g2) = chr_[1][-1], chr_[1][0]
         if chr_[0] == CHR_CIRCULAR:
-            res.append(((f'{g1}_{occ[g1]}', SIGN2EXT_1[o1]),
-                (f'{g2}_{fst_occ}', SIGN2EXT_2[o2])))
+            res.append(((f'{g1}' + (ao and f'_{occ[g1]}' or ''), SIGN2EXT_1[o1]),
+                (f'{g2}' + (ao and f'_{fst_occ}' or ''), SIGN2EXT_2[o2])))
         elif chr_[0] == CHR_LINEAR:
-            res.append(((f'{g1}_{occ[g1]}', SIGN2EXT_1[o1]), ('t', EXTR_CAP)))
-            res.append((('t', EXTR_CAP), (f'{g2}_{fst_occ}', SIGN2EXT_2[o2])))
+            res.append(((f'{g1}' + (ao and f'_{occ[g1]}' or ''), SIGN2EXT_1[o1]), ('t', EXTR_CAP)))
+            res.append((('t', EXTR_CAP), (f'{g2}' + (ao and f'_{fst_occ}' or ''), SIGN2EXT_2[o2])))
 
     return res
 
