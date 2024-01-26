@@ -371,8 +371,8 @@ def unimog2adjacencies(genome):
             res.append(((f'{g1}_{occ[g1]}', SIGN2EXT_1[o1]),
                 (f'{g2}_{fst_occ}', SIGN2EXT_2[o2])))
         elif chr_[0] == CHR_LINEAR:
-            res.append(((f'{g1}_{occ[g1]}', SIGN2EXT_1[o1]), ('t', EXTR_HEAD)))
-            res.append((('t', EXTR_HEAD), (f'{g2}_{fst_occ}', SIGN2EXT_2[o2])))
+            res.append(((f'{g1}_{occ[g1]}', SIGN2EXT_1[o1]), ('t', EXTR_CAP)))
+            res.append((('t', EXTR_CAP), (f'{g2}_{fst_occ}', SIGN2EXT_2[o2])))
 
     return res
 
